@@ -24,7 +24,6 @@ impl Wal {
         })
     }
 
-    // write a key value pair to the log
     // format: [key_len: 4 bytes][key][val_len: 4 bytes][value]
     pub fn put(&mut self, key: &str, value: &str) -> io::Result<()> {
         let key_bytes = key.as_bytes();
@@ -34,6 +33,18 @@ impl Wal {
         self.writer.write_all(key_bytes)?;
         self.writer.write_all(&(val_bytes.len() as u32).to_le_bytes())?;
         self.writer.write_all(val_bytes)?;
+        self.writer.flush()?;
+
+        Ok(())
+    }
+
+    // delete uses u32::MAX as tombstone marker for the value length
+    pub fn delete(&mut self, key: &str) -> io::Result<()> {
+        let key_bytes = key.as_bytes();
+
+        self.writer.write_all(&(key_bytes.len() as u32).to_le_bytes())?;
+        self.writer.write_all(key_bytes)?;
+        self.writer.write_all(&u32::MAX.to_le_bytes())?;
         self.writer.flush()?;
 
         Ok(())
