@@ -108,3 +108,43 @@ impl Wal {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_put_and_replay() {
+        let path = "test_wal_put.wal";
+
+        let mut wal = Wal::open(path).unwrap();
+        wal.put("key1", "value1").unwrap();
+        wal.put("key2", "value2").unwrap();
+        drop(wal);
+
+        let entries = Wal::replay(path).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].key, "key1");
+        assert_eq!(entries[0].value, Some("value1".to_string()));
+        assert_eq!(entries[1].key, "key2");
+        assert_eq!(entries[1].value, Some("value2".to_string()));
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_delete_and_replay() {
+        let path = "test_wal_del.wal";
+
+        let mut wal = Wal::open(path).unwrap();
+        wal.put("key1", "value1").unwrap();
+        wal.delete("key1").unwrap();
+        drop(wal);
+
+        let entries = Wal::replay(path).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[1].value, None);
+
+        std::fs::remove_file(path).unwrap();
+    }
+}
