@@ -46,3 +46,55 @@ impl MemTable {
         self.size_bytes = 0;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_put_and_get() {
+        let mut mt = MemTable::new();
+        mt.put("key1".to_string(), "value1".to_string());
+
+        match mt.get("key1") {
+            Some(Some(v)) => assert_eq!(v, "value1"),
+            _ => panic!("expected value1"),
+        }
+        assert!(mt.get("key2").is_none());
+    }
+
+    #[test]
+    fn test_delete_creates_tombstone() {
+        let mut mt = MemTable::new();
+        mt.put("key1".to_string(), "value1".to_string());
+        mt.delete("key1");
+
+        match mt.get("key1") {
+            Some(None) => {} // tombstone
+            _ => panic!("expected tombstone"),
+        }
+    }
+
+    #[test]
+    fn test_overwrite() {
+        let mut mt = MemTable::new();
+        mt.put("key1".to_string(), "v1".to_string());
+        mt.put("key1".to_string(), "v2".to_string());
+
+        match mt.get("key1") {
+            Some(Some(v)) => assert_eq!(v, "v2"),
+            _ => panic!("expected v2"),
+        }
+    }
+
+    #[test]
+    fn test_sorted_iteration() {
+        let mut mt = MemTable::new();
+        mt.put("c".to_string(), "3".to_string());
+        mt.put("a".to_string(), "1".to_string());
+        mt.put("b".to_string(), "2".to_string());
+
+        let keys: Vec<&String> = mt.iter().map(|(k, _)| k).collect();
+        assert_eq!(keys, vec!["a", "b", "c"]);
+    }
+}
