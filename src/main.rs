@@ -5,6 +5,7 @@ use wal::Wal;
 use memtable::MemTable;
 use std::io::{self, BufRead};
 
+// replay the wal to rebuild memtable state after a crash
 fn recover(wal_path: &str) -> io::Result<MemTable> {
     let mut memtable = MemTable::new();
     let entries = Wal::replay(wal_path)?;
@@ -53,6 +54,7 @@ fn main() -> io::Result<()> {
                     println!("usage: put <key> <value>");
                     continue;
                 }
+                // write to wal first for durability, then memtable for speed
                 wal.put(parts[1], parts[2])?;
                 memtable.put(parts[1].to_string(), parts[2].to_string());
                 println!("OK");
