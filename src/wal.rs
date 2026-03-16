@@ -2,11 +2,13 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
+// single operation in the log, None value means the key was deleted
 pub struct WalEntry {
     pub key: String,
     pub value: Option<String>,
 }
 
+// append only log that writes every operation to disk before memory
 pub struct Wal {
     writer: BufWriter<File>,
     path: String,
@@ -38,7 +40,7 @@ impl Wal {
         Ok(())
     }
 
-    // tombstone marker for deletes
+    // uses u32::MAX as a tombstone marker so replay knows this was a delete
     pub fn delete(&mut self, key: &str) -> io::Result<()> {
         let key_bytes = key.as_bytes();
 
@@ -50,7 +52,7 @@ impl Wal {
         Ok(())
     }
 
-    // read the entire wal from disk and return all entries
+    // read the entire log from disk, used on startup to rebuild state after a crash
     pub fn replay(path: &str) -> io::Result<Vec<WalEntry>> {
         if !Path::new(path).exists() {
             return Ok(vec![]);

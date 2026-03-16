@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-// in memory sorted key value store
+// sorted in memory key value store, sits on top of the wal
+// keys are always sorted because of btreemap which makes flushing to disk efficient
 pub struct MemTable {
     entries: BTreeMap<String, Option<String>>,
     size_bytes: usize,
