@@ -1,5 +1,6 @@
 
 use std::fs::OpenOptions;
+use std::io::Write;
 
 enum WalOperation {
     Put ,
@@ -31,7 +32,12 @@ impl Wal {
 
 
     fn append(&mut self, record : &WalRecord)->  Result<(), std::io::Error>{
-        todo!("append function")
+        let op_byte = match record.operation{
+            WalOperation::Put => 1u8,
+            WalOperation::Delete => 2u8,
+        };
+        self.file.write_all(&[op_byte])?;
+        Ok(())
     }
     
     fn recover(path:&str) -> Result<Vec<WalRecord>, std::io::Error>{
