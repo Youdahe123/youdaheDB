@@ -1,0 +1,15 @@
+[package]
+name = "rustdb"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rustdb"
+path = "src/main.rs"
+
+[dependencies]
+redis = "0.27"
+
+[profile.release]
+opt-level = 3
+lto = true
