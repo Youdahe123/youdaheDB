@@ -1,3 +1,6 @@
+
+use std::fs::OpenOptions;
+
 enum WalOperation {
     Put ,
     Delete,
@@ -17,8 +20,15 @@ impl Wal {
 
 
     fn open(path:&str) -> Result<Wal, std::io::Error> {
-        todo!("open function")
+        let file = OpenOptions::new()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open(path)?;
+
+        Ok(Wal{file})
     }
+
 
     fn append(&mut self, record : &WalRecord)->  Result<(), std::io::Error>{
         todo!("append function")
