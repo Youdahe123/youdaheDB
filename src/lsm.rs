@@ -1,75 +1,111 @@
-
-// brings OpenOptions into scope so we can use it without the full path every time
 use std::fs::OpenOptions;
-// brings the Write trait into scope — needed to call write_all on a File
 use std::io::Write;
+use std::io::Read;
+use std::io::BufReader;
 
-// enum = a type that can be one of a fixed set of values
-enum WalOperation {
+// the two operations a WAL record can represent
+pub enum WalOperation {
     Put,
     Delete,
 }
 
-// struct = groups related fields together
-struct WalRecord {
-    key: String,
-    value: String,
-    operation: WalOperation, // which of the two enum variants this record is
+// one entry in the WAL — captures a single database operation completely
+pub struct WalRecord {
+    pub key: String,
+    pub value: String,
+    pub operation: WalOperation,
 }
 
-struct Wal {
-    // std::fs::File is the Rust type for an open file handle
-    // storing it here means we open the file once and reuse it for every append
+// holds an open handle to the WAL file on disk
+pub struct Wal {
     file: std::fs::File,
 }
 
-// impl Wal = "here are the methods that belong to the Wal type"
 impl Wal {
 
-    // &str = a borrowed string reference — we don't need to own the path
-    // -> Result<Wal, std::io::Error> = returns either a Wal on success or an io error on failure
-    fn open(path: &str) -> Result<Wal, std::io::Error> {
+    // opens the WAL file at the given path, creating it if it doesn't exist
+    // returns a Wal wrapping the open file handle, or an io error
+    pub fn open(path: &str) -> Result<Wal, std::io::Error> {
         let file = OpenOptions::new()
-            .read(true)    // allow reading from this file
+            .read(true)    // needed for recover
             .append(true)  // all writes go to the end, never overwrite
             .create(true)  // create the file if it doesn't exist yet
-            .open(path)?;  // actually open it — ? means "if this errors, return the error immediately"
+            .open(path)?;  // ? returns the error immediately if open fails
 
-        // Ok(...) wraps the value to signal success
-        // Wal { file } creates a Wal struct with the file field set to our open file handle
         Ok(Wal { file })
     }
 
-    // &mut self = we need mutable access because writing to the file changes its internal state
-    // &WalRecord = we borrow the record, we don't need to own it
-    fn append(&mut self, record: &WalRecord) -> Result<(), std::io::Error> {
-        // match checks which variant record.operation is and returns a u8 value
-        // the whole expression evaluates to 1 or 2 and gets stored in op_byte
+    // serializes one WalRecord to disk in this format:
+    // [ op (1 byte) ][ key_len (4 bytes) ][ key bytes ][ value_len (4 bytes) ][ value bytes ]
+    pub fn append(&mut self, record: &WalRecord) -> Result<(), std::io::Error> {
+        // convert the operation enum to a single byte: Put=1, Delete=2
         let op_byte = match record.operation {
-            WalOperation::Put => 1u8,    // u8 = one byte unsigned integer
+            WalOperation::Put => 1u8,
             WalOperation::Delete => 2u8,
         };
 
-        // &[op_byte] = a one-element slice of bytes — write_all expects &[u8]
         self.file.write_all(&[op_byte])?;
 
-        // .len() = number of characters in the key
-        // as u32 = cast to a 32-bit integer so it's always exactly 4 bytes
-        // .to_le_bytes() = convert that u32 to 4 bytes in little-endian order
+        // write key length as exactly 4 bytes (little-endian) so recover knows how many bytes to read
         self.file.write_all(&(record.key.len() as u32).to_le_bytes())?;
-
-        // .as_bytes() = converts the String to a raw byte slice so we can write it
+        // write the raw key bytes
         self.file.write_all(record.key.as_bytes())?;
 
         // same pattern for the value
         self.file.write_all(&(record.value.len() as u32).to_le_bytes())?;
         self.file.write_all(record.value.as_bytes())?;
 
-        // Ok(()) = success with no return value — () is like void
+        // force the OS to flush its buffer to physical disk — without this, durability isn't guaranteed
+        self.file.sync_all()?;
         Ok(())
     }
 
-    fn recover(path: &str) -> Result<Vec<WalRecord>, std::io::Error> {
-        todo!("recover function")
+    // reads the WAL file from beginning to end and reconstructs all WalRecords
+    // used on startup to rebuild the MemTable after a crash
+    pub fn recover(path: &str) -> Result<Vec<WalRecord>, std::io::Error> {
+        let file = std::fs::File::open(path)?;
+        // BufReader batches disk reads for efficiency instead of one syscall per byte
+        let mut reader = BufReader::new(file);
+
+        let mut records: Vec<WalRecord> = Vec::new();
+
+        loop {
+            // try to read the op byte — if we hit end of file, we're done
+            let mut op_buf = [0u8; 1];
+            if reader.read_exact(&mut op_buf).is_err() {
+                break;
+            }
+
+            // convert the byte back to a WalOperation — reverse of what append wrote
+            let operation = match op_buf[0] {
+                1 => WalOperation::Put,
+                2 => WalOperation::Delete,
+                _ => break, // unexpected byte, stop reading
+            };
+
+            // read 4 bytes for key length, convert back to usize for use as a buffer size
+            let mut key_len_buf = [0u8; 4];
+            reader.read_exact(&mut key_len_buf)?;
+            let key_len = u32::from_le_bytes(key_len_buf) as usize;
+
+            // read exactly key_len bytes and convert back to a String
+            let mut key_buf = vec![0u8; key_len];
+            reader.read_exact(&mut key_buf)?;
+            let key = String::from_utf8(key_buf).unwrap();
+
+            // same pattern for the value
+            let mut value_len_buf = [0u8; 4];
+            reader.read_exact(&mut value_len_buf)?;
+            let value_len = u32::from_le_bytes(value_len_buf) as usize;
+
+            let mut value_buf = vec![0u8; value_len];
+            reader.read_exact(&mut value_buf)?;
+            let value = String::from_utf8(value_buf).unwrap();
+
+            // push the fully reconstructed record into the list
+            records.push(WalRecord { key, value, operation });
+        }
+
+        Ok(records)
     }
 }
