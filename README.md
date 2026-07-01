@@ -1,7 +1,7 @@
 # rustdb
 
 A small, deliberately simplified prototype of a distributed KV store in
-Rust — built to demonstrate (not to productionize) the core ideas behind
+Rust — built to demonstrate (not to productionize not yet ;) ) the core ideas behind
 systems like CockroachDB/TiKV:
 
 - **LSM-tree storage** (`src/lsm.rs`) — memtable + WAL + sorted segments + compaction
