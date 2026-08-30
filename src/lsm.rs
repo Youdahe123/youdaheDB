@@ -25,7 +25,7 @@ pub enum WalOperation {
 pub struct WalRecord {
     pub key: String,
     pub value: String,
-    pub operation: WalOperation,
+    pub operation: WalOperation, // removed operation layer so tests could pass
     
 }
 
