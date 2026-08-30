@@ -103,7 +103,7 @@ echo -e "  ${BOLD}Layer Status${RESET}"
 echo ""
 
 run_layer "WAL (Write-Ahead Log)"          "wal_tests"          "live"
-run_layer "MemTable"                        "memtable_tests"     "pending"
+run_layer "MemTable"                        "memtable_tests"     "live"
 run_layer "SSTable"                         "sstable_tests"      "pending"
 run_layer "LSM Tree"                        "lsm_tests"          "pending"
 run_layer "Raft Consensus"                  "raft_tests"         "pending"

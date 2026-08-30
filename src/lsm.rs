@@ -14,6 +14,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::io::Read;
 use std::io::BufReader;
+use std::collections::BTreeMap;
 
 // the two operations a WAL record can represent
 pub enum WalOperation {
@@ -127,5 +128,39 @@ impl Wal {
     pub fn truncate(&mut self) -> Result<(), std::io::Error> {
         self.file.set_len(0)?;
         self.file.sync_all()
+    }
+}
+
+pub enum Lookup{
+    Found(String),
+    Deleted,
+    NotFound,
+}
+
+pub struct MemTable {
+    map: BTreeMap<String, Option<String>>,
+}
+
+impl MemTable {
+
+    pub fn new() -> MemTable {
+        MemTable { map: BTreeMap::new() }
+    }
+
+    pub fn put(&mut self, key: String, value: String) {
+        self.map.insert(key, Some(value));
+    }
+
+  
+    pub fn delete(&mut self, key: String) {
+        self.map.insert(key, None);
+    }
+
+    pub fn get(&self, key: &str) -> Lookup {
+        match self.map.get(key) {
+            Some(Some(value)) => Lookup::Found(value.clone()),
+            Some(None) => Lookup::Deleted,
+            None => Lookup::NotFound,
+        }
     }
 }
