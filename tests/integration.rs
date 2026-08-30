@@ -1,6 +1,5 @@
-// Run all tests:        cargo test
-// Run one layer:        cargo test wal
-// Run future stubs:     cargo test -- --ignored
+// Tests. Only the WAL exists, so only the WAL is tested — each layer gets its
+// own module here as it's written. Run `cargo test`, or `cargo test wal`.
 
 mod wal_tests {
     use rustdb::lsm::{Wal, WalRecord, WalOperation};
@@ -84,39 +83,4 @@ mod wal_tests {
         assert_eq!(records.len(), 0);
         std::fs::remove_file(path).ok();
     }
-}
-
-mod memtable_tests {
-    #[test] #[ignore] fn memtable_put_and_get() { todo!() }
-    #[test] #[ignore] fn memtable_returns_none_for_missing_key() { todo!() }
-    #[test] #[ignore] fn memtable_delete_marks_tombstone() { todo!() }
-    #[test] #[ignore] fn memtable_flushes_when_full() { todo!() }
-}
-
-mod sstable_tests {
-    #[test] #[ignore] fn sstable_writes_sorted_keys() { todo!() }
-    #[test] #[ignore] fn sstable_bloom_filter_rejects_missing_key() { todo!() }
-    #[test] #[ignore] fn sstable_binary_search_finds_key() { todo!() }
-}
-
-mod lsm_tests {
-    #[test] #[ignore] fn lsm_write_then_read() { todo!() }
-    #[test] #[ignore] fn lsm_reads_newest_version_of_key() { todo!() }
-    #[test] #[ignore] fn lsm_compaction_removes_old_versions() { todo!() }
-}
-
-mod raft_tests {
-    #[test] #[ignore] fn raft_leader_election() { todo!() }
-    #[test] #[ignore] fn raft_log_replication_to_followers() { todo!() }
-    #[test] #[ignore] fn raft_leader_failover() { todo!() }
-}
-
-mod sharding_tests {
-    #[test] #[ignore] fn consistent_hash_routes_to_correct_shard() { todo!() }
-    #[test] #[ignore] fn adding_node_remaps_minimal_keys() { todo!() }
-}
-
-mod transaction_tests {
-    #[test] #[ignore] fn two_phase_commit_succeeds() { todo!() }
-    #[test] #[ignore] fn occ_aborts_on_conflict() { todo!() }
 }
