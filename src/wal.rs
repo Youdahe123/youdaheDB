@@ -35,7 +35,7 @@ impl Wal {
         self.writer.write_all(key_bytes)?;
         self.writer.write_all(&(val_bytes.len() as u32).to_le_bytes())?;
         self.writer.write_all(val_bytes)?;
-        self.writer.flush()?;
+        self.sync()?;
 
         Ok(())
     }
@@ -47,9 +47,18 @@ impl Wal {
         self.writer.write_all(&(key_bytes.len() as u32).to_le_bytes())?;
         self.writer.write_all(key_bytes)?;
         self.writer.write_all(&u32::MAX.to_le_bytes())?;
-        self.writer.flush()?;
+        self.sync()?;
 
         Ok(())
+    }
+
+    // flush() only hands the bytes to the OS, which may hold them in its page
+    // cache for seconds — that survives a process crash but NOT power loss.
+    // sync_all() forces the disk to actually store them, which is the whole
+    // point of a write ahead log. It is also the slowest line in the database.
+    fn sync(&mut self) -> io::Result<()> {
+        self.writer.flush()?;
+        self.writer.get_ref().sync_all()
     }
 
     // read the entire log from disk, used on startup to rebuild state after a crash
@@ -130,6 +139,69 @@ mod tests {
         assert_eq!(entries[0].value, Some("value1".to_string()));
         assert_eq!(entries[1].key, "key2");
         assert_eq!(entries[1].value, Some("value2".to_string()));
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_open_creates_file() {
+        let path = "test_wal_creates.wal";
+        std::fs::remove_file(path).ok();
+
+        assert!(Wal::open(path).is_ok());
+        assert!(std::path::Path::new(path).exists());
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    // a fresh database has an empty log and must replay to an empty state
+    // rather than erroring
+    #[test]
+    fn test_replay_empty_file() {
+        let path = "test_wal_empty.wal";
+        std::fs::remove_file(path).ok();
+
+        Wal::open(path).unwrap();
+        assert_eq!(Wal::replay(path).unwrap().len(), 0);
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    // replay must return every record in write order — that ordering is what
+    // makes rebuilding the memtable produce the same final state
+    #[test]
+    fn test_replay_preserves_write_order() {
+        let path = "test_wal_order.wal";
+        std::fs::remove_file(path).ok();
+
+        let mut wal = Wal::open(path).unwrap();
+        wal.put("a", "1").unwrap();
+        wal.put("b", "2").unwrap();
+        wal.put("a", "2").unwrap();
+        wal.delete("b").unwrap();
+        drop(wal);
+
+        let entries = Wal::replay(path).unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries[0].key, "a");
+        assert_eq!(entries[2].value, Some("2".to_string()));
+        assert_eq!(entries[3].value, None);
+
+        std::fs::remove_file(path).unwrap();
+    }
+
+    // clear() runs after a flush to sstable; the log must come back empty
+    #[test]
+    fn test_clear_empties_the_log() {
+        let path = "test_wal_clear.wal";
+        std::fs::remove_file(path).ok();
+
+        let mut wal = Wal::open(path).unwrap();
+        wal.put("key1", "value1").unwrap();
+        wal.clear().unwrap();
+        drop(wal);
+
+        assert_eq!(Wal::replay(path).unwrap().len(), 0);
 
         std::fs::remove_file(path).unwrap();
     }
