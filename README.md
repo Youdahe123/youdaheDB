@@ -275,7 +275,7 @@ cargo test     # full suite
 ./test.sh      # layer-by-layer status
 ```
 
-**Known gap:** the WAL currently calls `flush()`, which hands bytes to the OS page cache — that survives a process crash but not power loss. `sync_all()` is what makes it genuinely durable. Fix in flight on `feat/port-testing-stage`.
+Every WAL write is `fsync`'d before it is acknowledged — `flush()` alone only reaches the OS page cache, which survives a process crash but not power loss. That `sync_all()` is also the single slowest line in the engine; batching it across concurrent writers (group commit) is the standard way to buy it back.
 
 ---
 
