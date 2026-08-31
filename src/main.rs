@@ -2,7 +2,7 @@ mod wal;
 mod memtable;
 
 use wal::Wal;
-use memtable::MemTable;
+use memtable::{Lookup, MemTable};
 use std::io::{self, BufRead};
 
 // replay the wal to rebuild memtable state after a crash
@@ -66,9 +66,9 @@ fn main() -> io::Result<()> {
                     continue;
                 }
                 match memtable.get(parts[1]) {
-                    Some(Some(value)) => println!("{}", value),
-                    Some(None) => println!("(deleted)"),
-                    None => println!("(not found)"),
+                    Lookup::Found(value) => println!("{}", value),
+                    Lookup::Deleted => println!("(deleted)"),
+                    Lookup::NotFound => println!("(not found)"),
                 }
             }
 
