@@ -15,6 +15,7 @@ pub enum Lookup {
 pub struct MemTable {
     entries: BTreeMap<String, Option<String>>,
     size_bytes: usize,
+    max_size: usize,
 }
 
 impl MemTable {
@@ -22,6 +23,14 @@ impl MemTable {
         MemTable {
             entries: BTreeMap::new(),
             size_bytes: 0,
+            max_size: 4 * 1024 * 1024 ,
+        }
+    }
+    pub fn with_capacity(n : usize) -> Self {
+        MemTable {
+            entries: BTreeMap::new(),
+            size_bytes: 0,
+            max_size: n,
         }
     }
 
@@ -74,6 +83,9 @@ impl MemTable {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.size_bytes = 0;
+    }
+    pub fn is_full(&self) -> bool{
+        self.size_bytes >= self.max_size
     }
 }
 
