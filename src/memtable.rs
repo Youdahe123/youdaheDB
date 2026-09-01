@@ -19,12 +19,9 @@ pub struct MemTable {
 }
 
 impl MemTable {
+    const MAXSIZE: usize = 4 * 1024 * 1024;
     pub fn new() -> Self {
-        MemTable {
-            entries: BTreeMap::new(),
-            size_bytes: 0,
-            max_size: 4 * 1024 * 1024 ,
-        }
+        Self::with_capacity(Self::MAXSIZE)
     }
     pub fn with_capacity(n : usize) -> Self {
         MemTable {
@@ -70,6 +67,10 @@ impl MemTable {
 
     pub fn size(&self) -> usize {
         self.size_bytes
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -172,5 +173,82 @@ mod tests {
 
         let keys: Vec<&String> = mt.iter().map(|(k, _)| k).collect();
         assert_eq!(keys, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_new_memtable_is_not_full() {
+        let mt = MemTable::new();
+
+        assert!(!mt.is_full());
+        assert_eq!(mt.len(), 0);
+        assert_eq!(mt.size(), 0);
+    }
+
+    // with_capacity is what makes this testable - against the 4MB default this
+    // test would have to write four million bytes to trip the threshold
+    #[test]
+    fn test_is_full_once_threshold_crossed() {
+        let mut mt = MemTable::with_capacity(10);
+        assert!(!mt.is_full());
+
+        // 4 + 8 = 12 bytes, past the 10 byte limit
+        mt.put("key1".to_string(), "longvalue".to_string());
+
+        assert!(mt.is_full());
+    }
+
+    // the threshold is >=, not >, so landing exactly on it counts as full
+    #[test]
+    fn test_is_full_at_exactly_the_threshold() {
+        let mut mt = MemTable::with_capacity(6);
+
+        // 3 + 3 = 6 bytes exactly
+        mt.put("abc".to_string(), "xyz".to_string());
+
+        assert_eq!(mt.size(), 6);
+        assert!(mt.is_full());
+    }
+
+    // the one that matters: overwriting a hot key must not inflate the size.
+    // If insert() stopped subtracting the displaced entry, 100 writes to one
+    // key would trip a threshold that a single entry is nowhere near - and
+    // flushes would fire constantly on a workload with hot keys.
+    #[test]
+    fn test_overwriting_one_key_never_trips_is_full() {
+        let mut mt = MemTable::with_capacity(50);
+
+        for i in 0..100 {
+            mt.put("hot".to_string(), format!("value{i}"));
+        }
+
+        assert_eq!(mt.len(), 1, "overwrites must not add entries");
+        assert!(!mt.is_full(), "size must track current contents, not total writes");
+    }
+
+    // tombstones are writes too - a delete-only workload still has to flush
+    #[test]
+    fn test_tombstones_count_toward_the_threshold() {
+        let mut mt = MemTable::with_capacity(20);
+
+        for i in 0..10 {
+            mt.delete(&format!("key{i}"));
+        }
+
+        assert!(mt.is_full());
+    }
+
+    // clear() runs after a flush, so the memtable has to come back empty and
+    // ready to accept writes again
+    #[test]
+    fn test_clear_resets_full_state() {
+        let mut mt = MemTable::with_capacity(10);
+        mt.put("key1".to_string(), "longvalue".to_string());
+        assert!(mt.is_full());
+
+        mt.clear();
+
+        assert!(!mt.is_full());
+        assert_eq!(mt.len(), 0);
+        assert_eq!(mt.size(), 0);
     }
 }
