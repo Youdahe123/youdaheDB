@@ -1,5 +1,6 @@
 mod wal;
 mod memtable;
+mod sstable;
 
 use wal::Wal;
 use memtable::{Lookup, MemTable};
