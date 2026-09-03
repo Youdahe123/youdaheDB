@@ -103,7 +103,7 @@ echo ""
 
 run_layer "WAL (Write-Ahead Log)"          "wal::"              "live"
 run_layer "MemTable"                        "memtable::"         "live"
-run_layer "SSTable"                         "sstable::"          "pending"
+run_layer "SSTable"                         "sstable::"          "live"
 run_layer "LSM Tree"                        "lsm::"              "pending"
 run_layer "Raft Consensus"                  "raft::"             "pending"
 run_layer "Sharding"                        "sharding::"         "pending"
