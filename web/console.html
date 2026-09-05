@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+:root{ --rail:236px; }
+body{font-size:13.5px;line-height:1.5;overflow:hidden}
+.shell{display:flex;height:calc(100vh - 56px)}
+
+.rail{width:var(--rail);flex:0 0 var(--rail);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow-y:auto}
+.nav-group{padding:15px 0 6px}
+.nav-group > .label{padding:0 20px 8px}
+.nav a{display:flex;align-items:center;gap:9px;padding:8px 20px;color:var(--t2);
+  font-size:13px;cursor:pointer;border-left:2px solid transparent;transition:color .12s,background .12s}
+.nav a:hover{color:var(--t1);background:var(--fill)}
+.nav a.on{color:var(--t0);background:var(--fill-2);border-left-color:var(--t0)}
+.nav a .m{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--t4);letter-spacing:.08em}
+.rail-foot{margin-top:auto;border-top:1px solid var(--line);padding:14px 20px}
+.conn{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--t2)}
+.dot{width:6px;height:6px;flex:0 0 6px;background:var(--t4)}
+.dot.live{background:var(--st-good);box-shadow:0 0 8px rgba(12,163,12,.7)}
+.dot.mock{background:var(--st-warn)}
+.rail-foot .sub{margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--t4)}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{display:flex;align-items:center;gap:14px;padding:0 24px;height:50px;
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.crumb{font-family:var(--mono);font-size:12px;color:var(--t2)}
+.crumb b{color:var(--t0);font-weight:500}
+.badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:3px 8px;border:1px solid var(--line);color:var(--t3);display:inline-flex;align-items:center;gap:5px}
+.badge .b-dot{width:5px;height:5px}
+.badge.live{color:var(--st-good);border-color:rgba(12,163,12,.45)}
+.badge.live .b-dot{background:var(--st-good)}
+.badge.mock{color:var(--st-warn);border-color:rgba(250,178,25,.4)}
+.badge.mock .b-dot{background:var(--st-warn)}
+.badge.planned .b-dot{background:var(--t4)}
+.topbar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.tbtn{padding:6px 12px;border:1px solid var(--line);font-size:12px;color:var(--t2);cursor:pointer;transition:.12s}
+.tbtn:hover{color:var(--t0);background:var(--fill)}
+.tbtn.primary{background:var(--t1);color:#000;border-color:var(--t1)}
+
+.body{flex:1;overflow-y:auto;overflow-x:hidden}
+.body::-webkit-scrollbar{width:10px}
+.body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+.view{padding:24px 28px 60px}
+.view h2{margin:0 0 4px;font-size:17px}
+.view .lede{margin:0 0 22px;font-size:13px}
+.gap{height:28px}
+.notice{margin-bottom:22px}
+
+.grid{gap:0}
+.cell{padding:16px 18px 18px}
+.cell .k{margin-top:8px;font-size:12.5px;color:var(--t2)}
+.cell .v{margin-top:6px;font-size:24px}
+.meter{margin-top:11px;height:3px;background:rgba(255,255,255,.07)}
+.meter i{display:block;height:100%;background:var(--t2);transition:width .4s}
+.meter.hot i{background:var(--st-warn)}
+td{white-space:nowrap}
+.empty{padding:40px 0;text-align:center;color:var(--t4);font-family:var(--mono);font-size:12px}
+
+.editor{border:1px solid var(--line);background:var(--fill)}
+.editor-head{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line-soft)}
+.editor textarea{width:100%;padding:13px;font-family:var(--mono);font-size:13px;
+  color:var(--t0);resize:vertical;min-height:96px;line-height:1.65}
+.editor textarea::placeholder{color:var(--t4)}
+.editor-foot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+kbd{font-family:var(--mono);font-size:10px;color:var(--t3);border:1px solid var(--line);padding:2px 6px}
+.result-bar{display:flex;align-items:center;gap:14px;padding:10px 0;font-family:var(--mono);
+  font-size:11px;color:var(--t3);border-bottom:1px solid var(--line-soft)}
+.result-bar .ok{color:var(--st-good)}
+.result-bar .err{color:var(--st-crit)}
+.plan{font-family:var(--mono);font-size:12px;line-height:1.85;padding:16px 14px;
+  border:1px solid var(--line-soft);background:var(--fill);white-space:pre;overflow-x:auto;color:var(--t2)}
+.plan b{color:var(--t0);font-weight:500}
+.plan .c{color:var(--t4)}
+.hist{margin-top:26px}
+.hist-item{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-soft);
+  font-family:var(--mono);font-size:12px;cursor:pointer}
+.hist-item:hover{background:var(--fill)}
+.hist-item .t{color:var(--t4);font-size:10px;flex:0 0 58px}
+.hist-item .q{color:var(--t2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-item .d{color:var(--t4);font-size:10px}
+
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1px;
+  background:var(--line-soft);border:1px solid var(--line-soft)}
+.chart{background:var(--bg);padding:16px 18px 12px}
+.chart-head{display:flex;align-items:baseline;gap:10px;margin-bottom:2px}
+.chart-title{font-size:12.5px;color:var(--t1)}
+.chart-val{margin-left:auto;font-family:var(--mono);font-size:15px;color:var(--t0)}
+.chart-sub{font-family:var(--mono);font-size:10px;color:var(--t4);margin-bottom:10px}
+.chart svg{display:block;width:100%;overflow:visible}
+.lvbar{display:block;width:100%}
+.tip{position:fixed;pointer-events:none;z-index:50;background:#0a0a0a;border:1px solid var(--line);
+  padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--t1);opacity:0;transition:opacity .1s;white-space:nowrap}
+.tip .tl{color:var(--t3);font-size:10px;display:block;margin-bottom:3px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 0;font-family:var(--mono);font-size:11px;color:var(--t2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;font-style:normal}
+.ring-wrap{display:flex;gap:30px;align-items:center;flex-wrap:wrap}
+.ring-wrap svg{flex:0 0 auto}
+
+@media (max-width:920px){
+  body{overflow:auto}
+  .shell{flex-direction:column;height:auto}
+  .rail{width:100%;flex:none;border-right:0;border-bottom:1px solid var(--line)}
+  .view{padding:20px 16px 50px}
+}
+</style>
+</head>
+<body>
+
+<header class="topnav"><div class="in" style="max-width:none">
+  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="console.html" class="on">Console</a>
+  </nav>
+  <div class="right">
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div></header>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="nav-group">
+      <div class="label">Query</div>
+      <nav class="nav">
+        <a data-view="sql"><span>SQL shell</span><span class="m">M7</span></a>
+        <a data-view="schema"><span>Schema</span><span class="m">M7</span></a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="label">Cluster</div>
+      <nav class="nav">
+        <a data-view="cluster"><span>Nodes</span><span class="m">M4</span></a>
+        <a data-view="ranges"><span>Ranges</span><span class="m">M5</span></a>
+        <a data-view="txns"><span>Transactions</span><span class="m">M6</span></a>
+      </nav>
+    </div>
+    <div class="nav-group">
+      <div class="label">Engine</div>
+      <nav class="nav">
+        <a data-view="storage"><span>Storage</span><span class="m">M1</span></a>
+        <a data-view="jobs"><span>Jobs</span><span class="m">M1</span></a>
+        <a data-view="metrics"><span>Metrics</span><span class="m">M8</span></a>
+      </nav>
+    </div>
+    <div class="rail-foot">
+      <div class="conn"><span class="dot" id="dot"></span><span id="conn-text">connecting…</span></div>
+      <div class="sub" id="conn-sub">—</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="crumb"><b id="crumb-db">youdahedb</b> <span style="color:var(--t4)">/</span> <span id="crumb-view">sql</span></div>
+      <span class="badge" id="view-badge"><span class="b-dot"></span><span></span></span>
+      <div class="right"><button class="tbtn" id="btn-refresh">Refresh</button></div>
+    </div>
+    <div class="body"><div class="view" id="view"></div></div>
+  </main>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+
+/* Every view declares whether it is backed by a real engine, by mock data,
+   or is not built yet. The console is the shape of the finished product;
+   this is what keeps it honest. */
+const VIEWS = {
+  sql:     { title:"SQL shell",    milestone:"M7", issues:"#42 #43 #44",   state:"planned" },
+  schema:  { title:"Schema",       milestone:"M7", issues:"#42",           state:"planned" },
+  cluster: { title:"Nodes",        milestone:"M4", issues:"#23 #26 #33",   state:"planned" },
+  ranges:  { title:"Ranges",       milestone:"M5", issues:"#31 #32 #34",   state:"planned" },
+  txns:    { title:"Transactions", milestone:"M6", issues:"#37 #38 #39",   state:"planned" },
+  storage: { title:"Storage",      milestone:"M1", issues:"#3 #4 #8 #10",  state:"partial" },
+  jobs:    { title:"Jobs",         milestone:"M1", issues:"#4 #17 #34 #48",state:"planned" },
+  metrics: { title:"Metrics",      milestone:"M8", issues:"#45 #46",       state:"planned" },
+};
+const REPO = "https://github.com/Youdahe123/youdaheDB/issues";
+
+const API = {
+  live:false,
+  async _f(p,o){ const r = await fetch(p,o); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); },
+  async probe(){ try{ await this._f("/api/v1/health"); this.live = true; }catch{ this.live = false; } return this.live; },
+  stats(){  return this.live ? this._f("/api/v1/storage") : MOCK.storage(); },
+  nodes(){  return this.live ? this._f("/api/v1/nodes")   : MOCK.nodes(); },
+  ranges(){ return this.live ? this._f("/api/v1/ranges")  : MOCK.ranges(); },
+  txns(){   return this.live ? this._f("/api/v1/txns")    : MOCK.txns(); },
+  jobs(){   return this.live ? this._f("/api/v1/jobs")    : MOCK.jobs(); },
+  schema(){ return this.live ? this._f("/api/v1/schema")  : MOCK.schema(); },
+  series(){ return this.live ? this._f("/api/v1/metrics") : MOCK.series(); },
+  query(sql){ return this.live
+    ? this._f("/api/v1/query",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sql})})
+    : MOCK.query(sql); },
+};
+
+const MOCK = (() => {
+  const TABLES = {
+    users:{ pk:"id",
+      cols:[["id","bigint","not null"],["email","text","not null"],["created_at","timestamptz","not null"]],
+      rows:[[1,"youdahe@example.com","2026-08-14 09:12:04+00"],[2,"ada@example.com","2026-08-15 17:40:51+00"],
+            [3,"kofi@example.com","2026-08-19 11:02:33+00"],[4,"lin@example.com","2026-08-28 08:55:10+00"],
+            [5,"sam@example.com","2026-09-01 14:21:47+00"]] },
+    sessions:{ pk:"id",
+      cols:[["id","text","not null"],["user_id","bigint","not null"],["expires_at","timestamptz","not null"]],
+      rows:[["a91f",1,"2026-09-05 09:00:00+00"],["b02c",2,"2026-09-04 22:30:00+00"],["c73d",1,"2026-09-06 12:00:00+00"]] },
+    orders:{ pk:"id",
+      cols:[["id","bigint","not null"],["user_id","bigint","not null"],["total_cents","bigint","not null"],["status","text","not null"]],
+      rows:[[1001,1,4999,"shipped"],[1002,3,12050,"pending"],[1003,1,899,"shipped"],[1004,4,25000,"cancelled"]] },
+  };
+  const NODES = [
+    { id:"n1", addr:"10.0.1.11:6380", region:"us-east-1a", role:"leader",   status:"live",    uptime:"4d 02:11", ranges:6, store:"412 MB", term:7 },
+    { id:"n2", addr:"10.0.1.12:6380", region:"us-east-1b", role:"follower", status:"live",    uptime:"4d 02:09", ranges:6, store:"409 MB", term:7 },
+    { id:"n3", addr:"10.0.2.21:6380", region:"us-west-2a", role:"follower", status:"suspect", uptime:"0d 00:04", ranges:5, store:"388 MB", term:7 },
+  ];
+  const RANGES = [
+    { id:"r1", start:"/Min",               end:"/Table/users/1",     lease:"n1", replicas:["n1","n2","n3"], size:"64 MB",  qps:412,  term:7 },
+    { id:"r2", start:"/Table/users/1",     end:"/Table/users/5000",  lease:"n1", replicas:["n1","n2","n3"], size:"128 MB", qps:1180, term:7 },
+    { id:"r3", start:"/Table/users/5000",  end:"/Table/sessions/1",  lease:"n2", replicas:["n2","n1","n3"], size:"96 MB",  qps:640,  term:7 },
+    { id:"r4", start:"/Table/sessions/1",  end:"/Table/orders/1",    lease:"n2", replicas:["n2","n3","n1"], size:"51 MB",  qps:88,   term:7 },
+    { id:"r5", start:"/Table/orders/1",    end:"/Table/orders/9000", lease:"n3", replicas:["n3","n1","n2"], size:"142 MB", qps:305,  term:7 },
+    { id:"r6", start:"/Table/orders/9000", end:"/Max",               lease:"n1", replicas:["n1","n2","n3"], size:"12 MB",  qps:19,   term:7 },
+  ];
+  const TXNS = [
+    { id:"txn-8f21a", status:"pending",   isolation:"serializable", hlc:"1756982411.0003", age:"142ms", ranges:2, writes:14, node:"n1" },
+    { id:"txn-9c04b", status:"committed", isolation:"serializable", hlc:"1756982410.0011", age:"1.2s",  ranges:1, writes:3,  node:"n2" },
+    { id:"txn-a7d55", status:"aborted",   isolation:"snapshot",     hlc:"1756982409.0008", age:"2.9s",  ranges:3, writes:0,  node:"n1" },
+  ];
+  const JOBS = [
+    { id:"job-114", type:"COMPACTION", desc:"L0→L1 merge, 6 files → 1",   status:"running",   pct:62,  node:"n1", started:"00:01:12" },
+    { id:"job-113", type:"REBALANCE",  desc:"move r5 replica n3 → n2",    status:"queued",    pct:0,   node:"n2", started:"—" },
+    { id:"job-112", type:"BACKUP",     desc:"full → s3://ydb/2026-09-04", status:"succeeded", pct:100, node:"n1", started:"00:04:38" },
+    { id:"job-111", type:"COMPACTION", desc:"L1→L2 merge, 4 files → 1",   status:"failed",    pct:41,  node:"n3", started:"00:02:03" },
+  ];
+  const LEVELS = [
+    { level:0, files:6, entries:  49120, bytes: 12600000 },
+    { level:1, files:3, entries: 214000, bytes: 61000000 },
+    { level:2, files:2, entries: 690000, bytes:188000000 },
+    { level:3, files:1, entries:1120000, bytes:301000000 },
+  ];
+  let _s = 42; const rnd = () => (_s = (_s*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const mk = (n,base,jit,tr=0) => Array.from({length:n},(_,i)=>Math.max(0, base + tr*i + (rnd()-.5)*jit));
+  const SERIES = {
+    qps:     { label:"Queries per second",    unit:"qps",  data:mk(60,1400,420,6) },
+    p99:     { label:"p99 latency",           unit:"ms",   data:mk(60,8.4,5.5) },
+    raft:    { label:"Raft commit latency",   unit:"ms",   data:mk(60,3.1,2.2) },
+    compact: { label:"Compaction throughput", unit:"MB/s", data:mk(60,44,26) },
+  };
+
+  function query(sql){
+    const t0 = performance.now();
+    const q = sql.trim().replace(/;$/,""), low = q.toLowerCase();
+    const done = r => Promise.resolve(Object.assign(r,{ ms:+(performance.now()-t0+rnd()*2).toFixed(2) }));
+
+    if (/^explain/i.test(low)) {
+      const inner = q.replace(/^explain\s+/i,"");
+      const m = inner.match(/from\s+([a-z_]+)/i);
+      const tbl = m && TABLES[m[1]] ? m[1] : null;
+      if (!tbl) return done({ error:"relation does not exist" });
+      const filtered = /where/i.test(inner), rows = TABLES[tbl].rows.length;
+      return done({ plan:
+`<b>Query Plan</b>
+${filtered ? `Index Scan using <b>${tbl}_pkey</b> on <b>${tbl}</b>` : `Seq Scan on <b>${tbl}</b>`}  <span class="c">(cost=0.00..${(rows*1.7).toFixed(2)} rows=${rows} width=64)</span>
+${filtered ? `  Index Cond: ${inner.split(/where/i)[1].trim()}\n` : ""}  Storage: <b>LSM</b>  <span class="c">(memtable + L0..L3)</span>
+  Ranges scanned: <b>1</b>  <span class="c">(r2, leaseholder n1)</span>
+  Bloom filters consulted: <b>6</b>, skipped: <b>5</b>
+<span class="c">Planning Time: 0.184 ms
+Execution Time: ${(rows*0.04).toFixed(3)} ms</span>` });
+    }
+    if (/^show\s+tables/i.test(low))
+      return done({ cols:["table_name","rows"], rows:Object.keys(TABLES).map(t=>[t,TABLES[t].rows.length]) });
+    if (/^show\s+databases/i.test(low)) return done({ cols:["database"], rows:[["youdahedb"]] });
+    if (/^insert\s+into/i.test(low)) {
+      const m = q.match(/into\s+([a-z_]+)/i);
+      if (!m || !TABLES[m[1]]) return done({ error:`relation "${m?m[1]:"?"}" does not exist` });
+      return done({ notice:"INSERT 0 1" });
+    }
+    if (/^select/i.test(low)) {
+      const m = low.match(/from\s+([a-z_]+)/);
+      if (!m) return done({ error:`syntax error at or near "${q.split(/\s+/)[1]||""}"` });
+      const t = TABLES[m[1]];
+      if (!t) return done({ error:`relation "${m[1]}" does not exist` });
+      const colsPart = q.slice(6, low.indexOf(" from")).trim();
+      const cols = colsPart === "*" ? t.cols.map(c=>c[0]) : colsPart.split(",").map(s=>s.trim()).filter(Boolean);
+      const bad = cols.find(c => !t.cols.some(tc => tc[0]===c));
+      if (bad) return done({ error:`column "${bad}" does not exist` });
+      const idx = cols.map(c => t.cols.findIndex(tc => tc[0]===c));
+      let rows = t.rows.slice();
+      const w = q.match(/where\s+([a-z_]+)\s*(=|>|<)\s*'?([^'\s]+)'?/i);
+      if (w) {
+        const ci = t.cols.findIndex(c => c[0]===w[1].toLowerCase());
+        if (ci < 0) return done({ error:`column "${w[1]}" does not exist` });
+        rows = rows.filter(r => { const a=String(r[ci]), b=w[3];
+          return w[2]==="=" ? a===b : w[2]===">" ? +a>+b : +a<+b; });
+      }
+      const o = q.match(/order\s+by\s+([a-z_]+)(\s+desc)?/i);
+      if (o) { const ci = t.cols.findIndex(c=>c[0]===o[1].toLowerCase());
+        if (ci>=0){ rows.sort((x,y)=> x[ci]>y[ci]?1:-1); if(o[2]) rows.reverse(); } }
+      const l = q.match(/limit\s+(\d+)/i);
+      if (l) rows = rows.slice(0,+l[1]);
+      return done({ cols, rows: rows.map(r => idx.map(i=>r[i])) });
+    }
+    return done({ error:`syntax error at or near "${q.split(/\s+/)[0]}"` });
+  }
+
+  const bytes = LEVELS.reduce((n,l)=>n+l.bytes,0);
+  return {
+    storage: () => Promise.resolve({
+      memtable:{ entries:41, bytes:1180, limit:64 },
+      wal:{ bytes:1180, segments:1 },
+      levels:LEVELS,
+      totals:{ files:LEVELS.reduce((n,l)=>n+l.files,0), bytes, entries:LEVELS.reduce((n,l)=>n+l.entries,0) },
+      bloom:{ checks:184220, skipped:151004, fp_rate:0.0097 },
+      manifest:{ records:2114, live_files:12 },
+      version:"0.1-mock" }),
+    nodes:  () => Promise.resolve({ nodes:NODES }),
+    ranges: () => Promise.resolve({ ranges:RANGES }),
+    txns:   () => Promise.resolve({ txns:TXNS }),
+    jobs:   () => Promise.resolve({ jobs:JOBS }),
+    schema: () => Promise.resolve({ database:"youdahedb",
+      tables:Object.entries(TABLES).map(([name,t])=>({ name, pk:t.pk, rows:t.rows.length, columns:t.cols })) }),
+    series: () => Promise.resolve({ series:SERIES, window:"60m" }),
+    query, TABLES,
+  };
+})();
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtB = n => n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`
+  :n<1073741824?`${(n/1048576).toFixed(1)} MB`:`${(n/1073741824).toFixed(2)} GB`;
+const fmtN = n => n.toLocaleString("en-US");
+const now = () => new Date().toTimeString().slice(0,8);
+const SC = { live:"s-good", running:"s-good", succeeded:"s-good", committed:"s-good",
+  suspect:"s-warn", queued:"s-idle", pending:"s-warn", failed:"s-crit", aborted:"s-crit", dead:"s-crit" };
+const chip = s => `<span class="stat-ico ${SC[s]||"s-idle"}"><i></i>${esc(s)}</span>`;
+
+const tip = $("#tip");
+const showTip = (h,x,y) => { tip.innerHTML=h; tip.style.opacity=1;
+  tip.style.left = Math.min(x+14, innerWidth-tip.offsetWidth-10)+"px"; tip.style.top=(y-10)+"px"; };
+const hideTip = () => tip.style.opacity = 0;
+
+function sparkline(data,{unit="",color="var(--cat-1)",h=54}={}){
+  const w=300,pad=3,max=Math.max(...data),min=Math.min(...data),span=(max-min)||1;
+  const X=i=>pad+i*(w-pad*2)/(data.length-1), Y=v=>h-pad-((v-min)/span)*(h-pad*2);
+  const line=data.map((v,i)=>`${i?"L":"M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+  const area=`${line}L${X(data.length-1).toFixed(1)},${h-pad}L${X(0).toFixed(1)},${h-pad}Z`;
+  const id="g"+Math.random().toString(36).slice(2,8);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" height="${h}" data-spark='${JSON.stringify({data,unit})}'>
+    <defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity=".26"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="0" y1="${h-pad}" x2="${w}" y2="${h-pad}" stroke="var(--grid)" stroke-width="1"/>
+    <path d="${area}" fill="url(#${id})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"
+      stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <circle r="3.5" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0" class="cur"/>
+    <line class="cross" y1="0" y2="${h}" stroke="var(--axis)" stroke-width="1" opacity="0"/></svg>`;
+}
+function wireCharts(root){
+  root.querySelectorAll("svg[data-spark]").forEach(svg => {
+    const {data,unit}=JSON.parse(svg.dataset.spark);
+    const cur=svg.querySelector(".cur"), cross=svg.querySelector(".cross");
+    const max=Math.max(...data),min=Math.min(...data),span=(max-min)||1;
+    const h=svg.viewBox.baseVal.height,w=300,pad=3;
+    svg.addEventListener("pointermove", e => {
+      const r=svg.getBoundingClientRect();
+      const i=Math.max(0,Math.min(data.length-1,Math.round(((e.clientX-r.left)/r.width)*(data.length-1))));
+      const v=data[i], x=pad+i*(w-pad*2)/(data.length-1), y=h-pad-((v-min)/span)*(h-pad*2);
+      cur.setAttribute("cx",x); cur.setAttribute("cy",y); cur.setAttribute("opacity",1);
+      cross.setAttribute("x1",x); cross.setAttribute("x2",x); cross.setAttribute("opacity",1);
+      showTip(`<span class="tl">t−${data.length-1-i}m</span>${v.toFixed(unit==="qps"?0:2)} ${esc(unit)}`, e.clientX, e.clientY);
+    });
+    svg.addEventListener("pointerleave", ()=>{ cur.setAttribute("opacity",0); cross.setAttribute("opacity",0); hideTip(); });
+  });
+}
+function levelBar(levels){
+  const total=levels.reduce((n,l)=>n+l.bytes,0); let x=0;
+  const segs=levels.map(l=>{ const pw=(l.bytes/total)*100;
+    const s=`<rect x="${x}" y="0" width="${Math.max(0,pw-0.55)}" height="26" fill="var(--lv-${l.level})"><title>L${l.level} · ${l.files} files · ${fmtB(l.bytes)}</title></rect>`;
+    x+=pw; return s; }).join("");
+  return `<svg viewBox="0 0 100 26" preserveAspectRatio="none" height="26" class="lvbar">${segs}</svg>`;
+}
+
+const V = {};
+
+V.sql = async () => {
+  $("#view").innerHTML = `
+    <h2>SQL shell</h2>
+    <p class="lede">The <b>psql</b> surface. Backslash meta-commands and SQL, the same grammar the CLI speaks —
+      <code>\\l</code> <code>\\dt</code> <code>\\d &lt;table&gt;</code> <code>\\timing</code> <code>\\?</code>.
+      <b>EXPLAIN</b> renders the plan the cost-based optimizer will produce.</p>
+    ${noticeFor("sql")}
+    <div class="editor">
+      <div class="editor-head"><span class="label">query</span><span class="label" style="margin-left:auto">timing: on</span></div>
+      <textarea id="sqlbox" spellcheck="false">select id, email from users order by id limit 10;</textarea>
+      <div class="editor-foot">
+        <button class="tbtn primary" id="run">Run</button>
+        <button class="tbtn" id="explain">Explain</button>
+        <kbd>⌘ ↵</kbd>
+        <span style="margin-left:auto" class="label" id="conn2">—</span>
+      </div>
+    </div>
+    <div id="out"></div>
+    <div class="hist"><div class="label" style="margin-bottom:6px">History</div><div id="hist"></div></div>`;
+  $("#conn2").textContent = API.live ? "connected" : "mock engine";
+  const box = $("#sqlbox");
+  const run = async (prefix="") => {
+    const raw = box.value.trim(); if (!raw) return;
+    const sql = prefix ? `${prefix} ${raw.replace(/^explain\s+/i,"")}` : raw;
+    const out = $("#out");
+    if (sql.startsWith("\\")) { out.innerHTML = renderMeta(sql); pushHist(sql,0); return; }
+    let r; try { r = await API.query(sql); } catch(e){ r = { error:e.message, ms:0 }; }
+    if (r.error) out.innerHTML = `<div class="result-bar"><span class="err">ERROR</span><span>${esc(r.error)}</span><span style="margin-left:auto">${r.ms} ms</span></div>`;
+    else if (r.plan) out.innerHTML = `<div class="result-bar"><span class="ok">EXPLAIN</span><span style="margin-left:auto">${r.ms} ms</span></div><div class="plan">${r.plan}</div>`;
+    else if (r.notice) out.innerHTML = `<div class="result-bar"><span class="ok">${esc(r.notice)}</span><span style="margin-left:auto">${r.ms} ms</span></div>`;
+    else out.innerHTML = `<div class="result-bar"><span class="ok">OK</span><span>${r.rows.length} row${r.rows.length===1?"":"s"}</span><span style="margin-left:auto">${r.ms} ms</span></div>
+      <table><thead><tr>${r.cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead>
+      <tbody>${r.rows.map(row=>`<tr>${row.map((c,i)=>`<td class="${i?"":"k"}">${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+      ${r.rows.length?"":'<div class="empty">no rows</div>'}`;
+    pushHist(sql, r.ms);
+  };
+  $("#run").onclick = () => run();
+  $("#explain").onclick = () => run("explain");
+  box.addEventListener("keydown", e => { if ((e.metaKey||e.ctrlKey) && e.key==="Enter"){ e.preventDefault(); run(); } });
+  renderHist();
+};
+
+const HIST = [];
+function pushHist(sql,ms){ HIST.unshift({sql,ms,t:now()}); renderHist(); }
+function renderHist(){
+  const h = $("#hist"); if(!h) return;
+  h.innerHTML = HIST.length ? HIST.slice(0,12).map(x=>
+    `<div class="hist-item" data-q="${esc(x.sql)}"><span class="t">${x.t}</span><span class="q">${esc(x.sql)}</span><span class="d">${x.ms} ms</span></div>`).join("")
+    : `<div class="empty">no queries yet</div>`;
+  h.querySelectorAll(".hist-item").forEach(i => i.onclick = () => { $("#sqlbox").value=i.dataset.q; $("#sqlbox").focus(); });
+}
+
+function renderMeta(cmd){
+  const [c,arg] = cmd.trim().split(/\s+/);
+  const T = MOCK.TABLES;
+  const tbl=(cols,rows)=>`<table><thead><tr>${cols.map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${i?"":"k"}">${v}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const bar=t=>`<div class="result-bar"><span class="ok">${t}</span></div>`;
+  switch(c){
+    case "\\l": case "\\list": return bar("List of databases")+tbl(["name","owner","encoding"],[["youdahedb","youdahe","UTF8"]]);
+    case "\\dt": return bar("List of relations")+tbl(["schema","name","type","owner"],Object.keys(T).map(n=>["public",n,"table","youdahe"]));
+    case "\\d":
+      if (!arg) return bar("List of relations")+tbl(["schema","name","type"],Object.keys(T).map(n=>["public",n,"table"]));
+      if (!T[arg]) return `<div class="result-bar"><span class="err">ERROR</span><span>did not find any relation named "${esc(arg)}"</span></div>`;
+      return bar(`Table "public.${esc(arg)}"`)+tbl(["column","type","modifiers"],
+        T[arg].cols.map(([n,t,m])=>[esc(n),esc(t),esc(m)+(T[arg].pk===n?" · primary key":"")]));
+    case "\\du": return bar("List of roles")+tbl(["role","attributes"],[["youdahe","Superuser, Create role, Create DB"]]);
+    case "\\conninfo": return bar(API.live?"Connected to youdahedb on 127.0.0.1:6380":"Not connected — mock engine (no server on /api/v1)");
+    case "\\timing": return bar("Timing is on.");
+    case "\\?": return bar("psql meta-commands")+tbl(["command","description"],[
+      ["\\l","list databases"],["\\dt","list tables"],["\\d [table]","describe a table"],["\\du","list roles"],
+      ["\\timing","toggle query timing"],["\\conninfo","connection info"],["\\?","this help"],["\\q","quit (CLI only)"]]);
+    case "\\q": return bar("\\q has no effect in the browser — use it in youdahedb-cli.");
+    default: return `<div class="result-bar"><span class="err">ERROR</span><span>invalid command ${esc(cmd)} — try \\?</span></div>`;
+  }
+}
+
+V.schema = async () => {
+  const s = await API.schema();
+  $("#view").innerHTML = `
+    <h2>Schema</h2>
+    <p class="lede">Catalog for <b>${esc(s.database)}</b>. In the finished system this reads the SQL layer's catalog tables;
+      today the LSM engine underneath is schemaless key–value.</p>
+    ${noticeFor("schema")}
+    ${s.tables.map(t=>`<div style="margin-bottom:26px">
+      <div style="display:flex;align-items:baseline;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--line-soft)">
+        <span class="mono" style="color:var(--t0);font-size:13px">public.${esc(t.name)}</span>
+        <span class="pill">pk: ${esc(t.pk)}</span>
+        <span class="label" style="margin-left:auto">${t.rows} rows</span></div>
+      <table><thead><tr><th>column</th><th>type</th><th>modifiers</th></tr></thead><tbody>
+      ${t.columns.map(([n,ty,m])=>`<tr><td class="k">${esc(n)}</td><td>${esc(ty)}</td>
+        <td>${esc(m)}${t.pk===n?' <span class="pill">primary key</span>':""}</td></tr>`).join("")}
+      </tbody></table></div>`).join("")}`;
+};
+
+V.cluster = async () => {
+  const { nodes } = await API.nodes();
+  const live = nodes.filter(n=>n.status==="live").length;
+  $("#view").innerHTML = `
+    <h2>Nodes</h2>
+    <p class="lede">Cluster membership and Raft roles. Each range is its own Raft group, so <b>leader</b> here means
+      the node holding the most leases — not a cluster-wide master.</p>
+    ${noticeFor("cluster")}
+    <div class="grid g4">
+      <div class="cell"><div class="n">01</div><div class="k">Nodes live</div><div class="v">${live}<small>/ ${nodes.length}</small></div>
+        <div class="foot"><span>${nodes.length-live} suspect</span></div></div>
+      <div class="cell"><div class="n">02</div><div class="k">Raft term</div><div class="v">${nodes[0].term}</div>
+        <div class="foot"><span>no election in 4d</span></div></div>
+      <div class="cell"><div class="n">03</div><div class="k">Regions</div>
+        <div class="v">${new Set(nodes.map(n=>n.region.slice(0,-1))).size}</div>
+        <div class="foot"><span>${[...new Set(nodes.map(n=>n.region.slice(0,-1)))].join(" · ")}</span></div></div>
+      <div class="cell"><div class="n">04</div><div class="k">Replication</div><div class="v">3<small>× per range</small></div>
+        <div class="foot"><span>quorum 2</span></div></div>
+    </div>
+    <div class="gap"></div>
+    <table><colgroup><col style="width:8%"><col style="width:20%"><col style="width:16%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:10%"><col style="width:10%"></colgroup>
+      <thead><tr><th>node</th><th>address</th><th>region</th><th>raft role</th><th>status</th><th>ranges</th><th>store</th><th>uptime</th></tr></thead>
+      <tbody>${nodes.map(n=>`<tr><td class="k">${esc(n.id)}</td><td>${esc(n.addr)}</td><td>${esc(n.region)}</td>
+        <td><span class="pill">${esc(n.role)}</span></td><td>${chip(n.status)}</td>
+        <td>${n.ranges}</td><td>${esc(n.store)}</td><td>${esc(n.uptime)}</td></tr>`).join("")}</tbody></table>`;
+};
+
+V.ranges = async () => {
+  const { ranges } = await API.ranges();
+  const { nodes }  = await API.nodes();
+  $("#view").innerHTML = `
+    <h2>Ranges</h2>
+    <p class="lede">The keyspace split into contiguous ranges, placed on the hash ring with virtual nodes.
+      Each range has three replicas; the <b>leaseholder</b> serves reads without a Raft round trip.</p>
+    ${noticeFor("ranges")}
+    <div class="ring-wrap">
+      ${ringSvg(nodes, ranges)}
+      <div>
+        <div class="label" style="margin-bottom:10px">Ring — arc colour is the leaseholder node</div>
+        <div class="legend" style="flex-direction:column;align-items:flex-start;gap:9px">
+          ${nodes.map((n,i)=>{ const c = ranges.filter(r=>r.lease===n.id).length;
+            return `<span><i style="background:var(--cat-${i+1})"></i> ${esc(n.id)} — ${esc(n.region)} · holds ${c} lease${c===1?"":"s"}</span>`;}).join("")}
+        </div>
+        <div class="label" style="margin:16px 0 8px">In the table</div>
+        <div class="legend" style="flex-direction:column;align-items:flex-start;gap:7px">
+          <span style="color:var(--cat-1)"><i style="background:var(--cat-1)"></i> leaseholder — serves reads directly</span>
+          <span style="color:var(--t3)"><i style="background:var(--t4)"></i> follower — replicates the Raft log, votes</span>
+        </div>
+      </div>
+    </div>
+    <div class="gap"></div>
+    <table><colgroup><col style="width:8%"><col style="width:23%"><col style="width:23%"><col style="width:14%"><col style="width:14%"><col style="width:9%"><col style="width:9%"></colgroup>
+      <thead><tr><th>range</th><th>start key</th><th>end key</th><th>leaseholder</th><th>replicas</th><th>size</th><th>qps</th></tr></thead>
+      <tbody>${ranges.map(r=>`<tr><td class="k">${esc(r.id)}</td><td>${esc(r.start)}</td><td>${esc(r.end)}</td>
+        <td><span class="stat-ico" style="color:var(--cat-1)"><i style="background:var(--cat-1)"></i>${esc(r.lease)}</span></td>
+        <td>${r.replicas.map((n,i)=>`<span class="pill" title="${i?"follower":"leaseholder"}" style="border-color:${i?"var(--line)":"rgba(57,135,229,.5)"};color:${i?"var(--t3)":"var(--cat-1)"}">${esc(n)}</span>`).join(" ")}</td>
+        <td>${esc(r.size)}</td><td>${r.qps}</td></tr>`).join("")}</tbody></table>`;
+};
+
+function ringSvg(nodes, ranges){
+  const R=78,cx=100,cy=100,COL=["var(--cat-1)","var(--cat-2)","var(--cat-3)"];
+  const arcs = ranges.map((r,i)=>{
+    const a0=(i/ranges.length)*2*Math.PI-Math.PI/2, a1=((i+1)/ranges.length)*2*Math.PI-Math.PI/2, g=.035;
+    const x0=cx+R*Math.cos(a0+g), y0=cy+R*Math.sin(a0+g), x1=cx+R*Math.cos(a1-g), y1=cy+R*Math.sin(a1-g);
+    const ni=nodes.findIndex(n=>n.id===r.lease);
+    return `<path d="M${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)}"
+      fill="none" stroke="${COL[ni<0?0:ni]}" stroke-width="9"><title>${r.id} · lease ${r.lease} · ${r.size}</title></path>`;
+  }).join("");
+  return `<svg width="200" height="200" viewBox="0 0 200 200">
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--grid)" stroke-width="9"/>${arcs}
+    <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="var(--mono)" font-size="19" fill="var(--t0)">${ranges.length}</text>
+    <text x="${cx}" y="${cy+12}" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--t3)" letter-spacing="1.4">RANGES</text></svg>`;
+}
+
+V.txns = async () => {
+  const { txns } = await API.txns();
+  $("#view").innerHTML = `
+    <h2>Transactions</h2>
+    <p class="lede">Open and recently-settled transactions. Timestamps are <b>hybrid logical clocks</b>; a write spanning
+      more than one range commits through the <b>two-phase commit</b> coordinator.</p>
+    ${noticeFor("txns")}
+    <div class="grid g4">
+      <div class="cell"><div class="n">01</div><div class="k">Open</div>
+        <div class="v">${txns.filter(t=>t.status==="pending").length}</div><div class="foot"><span>oldest 142ms</span></div></div>
+      <div class="cell"><div class="n">02</div><div class="k">Isolation</div>
+        <div class="v" style="font-size:17px">serializable</div><div class="foot"><span>default level</span></div></div>
+      <div class="cell"><div class="n">03</div><div class="k">Contention</div>
+        <div class="v">0<small>waiting</small></div><div class="foot"><span>no lock waits</span></div></div>
+      <div class="cell"><div class="n">04</div><div class="k">Abort rate</div>
+        <div class="v">1.4<small>%</small></div><div class="foot"><span>last 5 min</span></div></div>
+    </div>
+    <div class="gap"></div>
+    <table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:16%"><col style="width:18%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"></colgroup>
+      <thead><tr><th>txn id</th><th>status</th><th>isolation</th><th>hlc timestamp</th><th>age</th><th>ranges</th><th>writes</th><th>node</th></tr></thead>
+      <tbody>${txns.map(t=>`<tr><td class="k">${esc(t.id)}</td><td>${chip(t.status)}</td><td>${esc(t.isolation)}</td>
+        <td>${esc(t.hlc)}</td><td>${esc(t.age)}</td><td>${t.ranges}</td><td>${t.writes}</td><td>${esc(t.node)}</td></tr>`).join("")}</tbody></table>`;
+};
+
+V.storage = async () => {
+  const s = await API.stats();
+  const pct = Math.round(s.memtable.entries/s.memtable.limit*100);
+  const skip = ((s.bloom.skipped/s.bloom.checks)*100).toFixed(1);
+  $("#view").innerHTML = `
+    <h2>Storage</h2>
+    <p class="lede">The LSM engine on this node. Writes land in the memtable, flush to <b>L0</b>, and compaction merges
+      them down through <b>L3</b>. The <b>MANIFEST</b> — not the directory listing — decides which files are live.</p>
+    ${noticeFor("storage")}
+    <div class="grid g4">
+      <div class="cell"><div class="n">01</div><div class="k">Memtable</div>
+        <div class="v">${s.memtable.entries}<small>/ ${s.memtable.limit}</small></div>
+        <div class="meter ${pct>75?"hot":""}"><i style="width:${pct}%"></i></div>
+        <div class="foot"><span>${fmtB(s.memtable.bytes)}</span><span>${pct}%</span></div></div>
+      <div class="cell"><div class="n">02</div><div class="k">SSTables</div>
+        <div class="v">${s.totals.files}<small>files</small></div>
+        <div class="foot"><span>${fmtN(s.totals.entries)} entries</span><span>${fmtB(s.totals.bytes)}</span></div></div>
+      <div class="cell"><div class="n">03</div><div class="k">Bloom filters</div>
+        <div class="v">${skip}<small>% skipped</small></div>
+        <div class="foot"><span>${fmtN(s.bloom.checks)} checks</span><span>fp ${(s.bloom.fp_rate*100).toFixed(2)}%</span></div></div>
+      <div class="cell"><div class="n">04</div><div class="k">Write-ahead log</div>
+        <div class="v">${fmtB(s.wal.bytes)}</div>
+        <div class="foot"><span>${s.wal.segments} segment</span><span>truncates on flush</span></div></div>
+    </div>
+    <div class="gap"></div>
+    <div class="label" style="margin-bottom:10px">Bytes by level</div>
+    ${levelBar(s.levels)}
+    <div class="legend">${s.levels.map(l=>`<span><i style="background:var(--lv-${l.level})"></i> L${l.level} · ${l.files} file${l.files===1?"":"s"} · ${fmtB(l.bytes)}</span>`).join("")}</div>
+    <div class="gap"></div>
+    <table><colgroup><col style="width:12%"><col style="width:16%"><col style="width:22%"><col style="width:22%"><col style="width:28%"></colgroup>
+      <thead><tr><th>level</th><th>files</th><th>entries</th><th>size</th><th>share</th></tr></thead>
+      <tbody>${s.levels.map(l=>`<tr>
+        <td class="k"><span class="stat-ico"><i style="background:var(--lv-${l.level})"></i>L${l.level}</span></td>
+        <td>${l.files}</td><td>${fmtN(l.entries)}</td><td>${fmtB(l.bytes)}</td>
+        <td>${((l.bytes/s.totals.bytes)*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table>
+    <div class="gap"></div>
+    <div class="grid g2">
+      <div class="cell"><div class="n">05</div><div class="k">MANIFEST</div>
+        <div class="v">${fmtN(s.manifest.records)}<small>records</small></div>
+        <div class="foot"><span>${s.manifest.live_files} live files</span><span>append-only</span></div></div>
+      <div class="cell"><div class="n">06</div><div class="k">Write amplification</div>
+        <div class="v">4.2<small>×</small></div>
+        <div class="foot"><span>leveled compaction</span><span>L0→L3</span></div></div>
+    </div>`;
+};
+
+V.jobs = async () => {
+  const { jobs } = await API.jobs();
+  $("#view").innerHTML = `
+    <h2>Jobs</h2>
+    <p class="lede">Long-running background work — compaction, replica rebalancing, backups. Everything here is
+      rate-limited so it cannot starve foreground traffic.</p>
+    ${noticeFor("jobs")}
+    <table><colgroup><col style="width:11%"><col style="width:14%"><col style="width:30%"><col style="width:14%"><col style="width:15%"><col style="width:8%"><col style="width:8%"></colgroup>
+      <thead><tr><th>job</th><th>type</th><th>description</th><th>status</th><th>progress</th><th>node</th><th>elapsed</th></tr></thead>
+      <tbody>${jobs.map(j=>`<tr><td class="k">${esc(j.id)}</td><td><span class="pill">${esc(j.type)}</span></td>
+        <td>${esc(j.desc)}</td><td>${chip(j.status)}</td>
+        <td><div class="meter" style="margin:0"><i style="width:${j.pct}%;background:${
+          j.status==="failed"?"var(--st-crit)":j.status==="succeeded"?"var(--st-good)":"var(--t2)"}"></i></div>
+          <span style="font-size:10px;color:var(--t4)">${j.pct}%</span></td>
+        <td>${esc(j.node)}</td><td>${esc(j.started)}</td></tr>`).join("")}</tbody></table>`;
+};
+
+V.metrics = async () => {
+  const { series, window:win } = await API.series();
+  const cards = Object.values(series).map(s => {
+    const last=s.data[s.data.length-1], first=s.data[0], d=((last-first)/first*100);
+    return `<div class="chart">
+      <div class="chart-head"><span class="chart-title">${esc(s.label)}</span>
+        <span class="chart-val">${last.toFixed(s.unit==="qps"?0:1)}<span style="font-size:10px;color:var(--t3);margin-left:4px">${esc(s.unit)}</span></span></div>
+      <div class="chart-sub">${d>=0?"▲":"▼"} ${Math.abs(d).toFixed(1)}% over ${esc(win)}</div>
+      ${sparkline(s.data,{unit:s.unit})}</div>`;
+  }).join("");
+  $("#view").innerHTML = `
+    <h2>Metrics</h2>
+    <p class="lede">One measure per chart — never two scales on one axis. Hover for the value at a point in time.
+      The same series are exported in Prometheus format at <code>/metrics</code>.</p>
+    ${noticeFor("metrics")}
+    <div class="charts">${cards}</div>
+    <div class="gap"></div>
+    <div class="label" style="margin-bottom:8px">Table view</div>
+    <table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>
+      <thead><tr><th>series</th><th>current</th><th>min</th><th>max</th></tr></thead>
+      <tbody>${Object.values(series).map(s=>`<tr><td class="k">${esc(s.label)}</td>
+        <td>${s.data[s.data.length-1].toFixed(2)} ${esc(s.unit)}</td>
+        <td>${Math.min(...s.data).toFixed(2)}</td><td>${Math.max(...s.data).toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+  wireCharts($("#view"));
+};
+
+function noticeFor(v){
+  const m = VIEWS[v];
+  if (m.state === "live") return "";
+  const links = m.issues.replace(/#(\d+)/g,(_,n)=>`<a href="${REPO}/${n}" target="_blank" rel="noopener">#${n}</a>`);
+  return m.state === "partial"
+    ? `<div class="notice"><b>Partly wired.</b> The engine layers exist in <code>wal.rs</code>, <code>memtable.rs</code>
+        and <code>sstable.rs</code>, but nothing ties them together yet — the numbers below are mock until
+        <code>src/lsm.rs</code> lands. ${m.milestone} · ${links}</div>`
+    : `<div class="notice"><b>Not built yet.</b> This view is the designed end state for <b>${m.milestone}</b>
+        and renders mock data. ${links}</div>`;
+}
+
+async function go(name){
+  if (!VIEWS[name]) name = "sql";
+  document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on", a.dataset.view===name));
+  const m = VIEWS[name];
+  $("#crumb-view").textContent = name;
+  const b = $("#view-badge");
+  const state = m.state==="partial" ? "mock" : m.state==="live" ? "live" : "planned";
+  b.className = "badge " + state;
+  b.lastElementChild.textContent = `${m.state==="live"?"live":m.state==="partial"?"partly wired":"planned"} · ${m.milestone}`;
+  location.hash = name;
+  await V[name]();
+}
+document.querySelectorAll(".nav a").forEach(a => a.onclick = () => go(a.dataset.view));
+$("#btn-refresh").onclick = () => go(location.hash.slice(1) || "sql");
+addEventListener("hashchange", () => go(location.hash.slice(1)));
+
+(async function boot(){
+  const live = await API.probe();
+  $("#dot").className = "dot " + (live ? "live" : "mock");
+  $("#conn-text").textContent = live ? "connected" : "mock engine";
+  $("#conn-sub").textContent  = live ? "127.0.0.1:6380 · youdahedb" : "no server on /api/v1";
+  go(location.hash.slice(1) || "sql");
+})();
+</script>
+</body>
+</html>
