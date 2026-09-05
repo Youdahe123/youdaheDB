@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""
+youdahedb-cli — psql-style client for youdaheDB.
+
+UX prototype for issue #21 (M3 · Network & client). The shipping client is
+Rust and speaks the binary protocol from #19; this speaks the HTTP API in
+web/API.md so the command surface can be designed and demoed before either
+exists. Meta-commands here are identical to the ones in the web console.
+
+    youdahedb                          interactive shell
+    youdahedb -c "select * from users" one-shot, then exit
+    echo "select 1" | youdahedb        read from a pipe
+    youdahedb --host db1 --port 8080   point at another node
+
+Exit codes:  0 ok · 1 query error · 2 connection error
+"""
+import argparse, json, os, sys, time
+import urllib.request, urllib.error
+
+VERSION = "0.1"
+BOLD, DIM, RED, GRN, YEL, RST = "\033[1m", "\033[2m", "\033[31m", "\033[32m", "\033[33m", "\033[0m"
+
+
+def color(on):
+    global BOLD, DIM, RED, GRN, YEL, RST
+    if not on:
+        BOLD = DIM = RED = GRN = YEL = RST = ""
+
+
+# ──────────────────────────────────────────────────────────────
+# transport
+# ──────────────────────────────────────────────────────────────
+class Conn:
+    def __init__(self, host, port, timeout=5):
+        self.base = f"http://{host}:{port}"
+        self.timeout = timeout
+        self.live = False
+        self.db = "youdahedb"
+
+    def _req(self, path, payload=None, method="GET"):
+        url = self.base + path
+        data = json.dumps(payload).encode() if payload is not None else None
+        req = urllib.request.Request(url, data=data, method="POST" if data else method,
+                                     headers={"content-type": "application/json"})
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            return json.loads(r.read().decode())
+
+    def probe(self):
+        try:
+            self._req("/api/v1/health")
+            self.live = True
+        except Exception:
+            self.live = False
+        return self.live
+
+    def query(self, sql):
+        if not self.live:
+            return MOCK.query(sql)
+        return self._req("/api/v1/query", {"sql": sql})
+
+    def get(self, path):
+        if not self.live:
+            return MOCK.get(path)
+        return self._req(path)
+
+
+# ──────────────────────────────────────────────────────────────
+# mock engine — mirrors web/index.html so the CLI is demoable
+# with no server running. Removed once #19/#21 land.
+# ──────────────────────────────────────────────────────────────
+class Mock:
+    TABLES = {
+        "users": {
+            "pk": "id",
+            "cols": [("id", "bigint", "not null"), ("email", "text", "not null"),
+                     ("created_at", "timestamptz", "not null")],
+            "rows": [[1, "youdahe@example.com", "2026-08-14 09:12:04+00"],
+                     [2, "ada@example.com", "2026-08-15 17:40:51+00"],
+                     [3, "kofi@example.com", "2026-08-19 11:02:33+00"],
+                     [4, "lin@example.com", "2026-08-28 08:55:10+00"],
+                     [5, "sam@example.com", "2026-09-01 14:21:47+00"]],
+        },
+        "sessions": {
+            "pk": "id",
+            "cols": [("id", "text", "not null"), ("user_id", "bigint", "not null"),
+                     ("expires_at", "timestamptz", "not null")],
+            "rows": [["a91f", 1, "2026-09-05 09:00:00+00"],
+                     ["b02c", 2, "2026-09-04 22:30:00+00"],
+                     ["c73d", 1, "2026-09-06 12:00:00+00"]],
+        },
+        "orders": {
+            "pk": "id",
+            "cols": [("id", "bigint", "not null"), ("user_id", "bigint", "not null"),
+                     ("total_cents", "bigint", "not null"), ("status", "text", "not null")],
+            "rows": [[1001, 1, 4999, "shipped"], [1002, 3, 12050, "pending"],
+                     [1003, 1, 899, "shipped"], [1004, 4, 25000, "cancelled"]],
+        },
+    }
+
+    def get(self, path):
+        if path.endswith("/nodes"):
+            return {"nodes": [
+                {"id": "n1", "addr": "10.0.1.11:6380", "region": "us-east-1a", "role": "leader",
+                 "status": "live", "ranges": 6, "store": "412 MB", "uptime": "4d 02:11"},
+                {"id": "n2", "addr": "10.0.1.12:6380", "region": "us-east-1b", "role": "follower",
+                 "status": "live", "ranges": 6, "store": "409 MB", "uptime": "4d 02:09"},
+                {"id": "n3", "addr": "10.0.2.21:6380", "region": "us-west-2a", "role": "follower",
+                 "status": "suspect", "ranges": 5, "store": "388 MB", "uptime": "0d 00:04"}]}
+        if path.endswith("/storage"):
+            return {"memtable": {"entries": 41, "limit": 64, "bytes": 1180},
+                    "levels": [{"level": 0, "files": 6, "bytes": 12600000},
+                               {"level": 1, "files": 3, "bytes": 61000000},
+                               {"level": 2, "files": 2, "bytes": 188000000},
+                               {"level": 3, "files": 1, "bytes": 301000000}]}
+        return {}
+
+    def query(self, sql):
+        t0 = time.time()
+        q = sql.strip().rstrip(";")
+        low = q.lower()
+
+        def done(r):
+            r["ms"] = round((time.time() - t0) * 1000, 2)
+            return r
+
+        if low.startswith("explain"):
+            inner = q[7:].strip()
+            tbl = next((t for t in self.TABLES if t in inner.lower()), None)
+            if not tbl:
+                return done({"error": "relation does not exist"})
+            n = len(self.TABLES[tbl]["rows"])
+            filt = "where" in inner.lower()
+            plan = ["Query Plan"]
+            plan.append(f"{'Index Scan using ' + tbl + '_pkey on ' if filt else 'Seq Scan on '}{tbl}"
+                        f"  (cost=0.00..{n * 1.7:.2f} rows={n} width=64)")
+            plan.append("  Storage: LSM (memtable + L0..L3)")
+            plan.append("  Ranges scanned: 1 (r2, leaseholder n1)")
+            plan.append("  Bloom filters consulted: 6, skipped: 5")
+            plan.append(f"  Planning Time: 0.184 ms")
+            plan.append(f"  Execution Time: {n * 0.04:.3f} ms")
+            return done({"plan": "\n".join(plan)})
+
+        if low.startswith("show tables"):
+            return done({"cols": ["table_name", "rows"],
+                         "rows": [[t, len(v["rows"])] for t, v in self.TABLES.items()]})
+        if low.startswith("show databases"):
+            return done({"cols": ["database"], "rows": [["youdahedb"]]})
+        if low.startswith("insert into"):
+            return done({"notice": "INSERT 0 1"})
+
+        if low.startswith("select"):
+            if " from " not in low:
+                return done({"error": 'syntax error at or near "from"'})
+            name = low.split(" from ")[1].split()[0].rstrip(";")
+            t = self.TABLES.get(name)
+            if not t:
+                return done({"error": f'relation "{name}" does not exist'})
+            colpart = q[6:low.index(" from ")].strip()
+            cols = [c[0] for c in t["cols"]] if colpart == "*" else [c.strip() for c in colpart.split(",")]
+            for c in cols:
+                if c not in [x[0] for x in t["cols"]]:
+                    return done({"error": f'column "{c}" does not exist'})
+            idx = [[x[0] for x in t["cols"]].index(c) for c in cols]
+            rows = list(t["rows"])
+            if " where " in low:
+                cond = low.split(" where ")[1].split(" order ")[0].split(" limit ")[0].strip()
+                for op in ("=", ">", "<"):
+                    if op in cond:
+                        lhs, rhs = [s.strip().strip("'") for s in cond.split(op, 1)]
+                        names = [x[0] for x in t["cols"]]
+                        if lhs not in names:
+                            return done({"error": f'column "{lhs}" does not exist'})
+                        ci = names.index(lhs)
+                        if op == "=":
+                            rows = [r for r in rows if str(r[ci]) == rhs]
+                        elif op == ">":
+                            rows = [r for r in rows if float(r[ci]) > float(rhs)]
+                        else:
+                            rows = [r for r in rows if float(r[ci]) < float(rhs)]
+                        break
+            if " limit " in low:
+                rows = rows[: int(low.split(" limit ")[1].split()[0])]
+            return done({"cols": cols, "rows": [[r[i] for i in idx] for r in rows]})
+
+        return done({"error": f'syntax error at or near "{q.split()[0] if q.split() else ""}"'})
+
+
+MOCK = Mock()
+
+
+# ──────────────────────────────────────────────────────────────
+# psql-style rendering
+# ──────────────────────────────────────────────────────────────
+def render_table(cols, rows, expanded=False):
+    if expanded:
+        out = []
+        for i, r in enumerate(rows, 1):
+            out.append(f"{DIM}-[ RECORD {i} ]{RST}")
+            w = max((len(str(c)) for c in cols), default=0)
+            for c, v in zip(cols, r):
+                out.append(f"{str(c).ljust(w)} | {v}")
+        return "\n".join(out)
+
+    cells = [[str(c) for c in cols]] + [[str(v) for v in r] for r in rows]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(cols))]
+    head = " " + " | ".join(str(c).center(w) for c, w in zip(cols, widths)) + " "
+    sep = "-" + "-+-".join("-" * w for w in widths) + "-"
+    body = [" " + " | ".join(str(v).ljust(w) for v, w in zip(r, widths)) + " " for r in rows]
+    n = len(rows)
+    return "\n".join([BOLD + head + RST, sep] + body + [f"({n} row{'' if n == 1 else 's'})"])
+
+
+META_HELP = [
+    ("\\l", "list databases"), ("\\dt", "list tables"), ("\\d [table]", "describe a table"),
+    ("\\du", "list roles"), ("\\dn", "list nodes"), ("\\dr", "storage / LSM levels"),
+    ("\\timing", "toggle query timing"), ("\\x", "toggle expanded output"),
+    ("\\conninfo", "connection info"), ("\\?", "this help"), ("\\q", "quit"),
+]
+
+
+class Session:
+    def __init__(self, conn):
+        self.c = conn
+        self.timing = True
+        self.expanded = False
+
+    def meta(self, line):
+        parts = line.split()
+        cmd, arg = parts[0], (parts[1] if len(parts) > 1 else None)
+        T = Mock.TABLES
+
+        if cmd in ("\\l", "\\list"):
+            print("List of databases")
+            print(render_table(["name", "owner", "encoding"], [["youdahedb", "youdahe", "UTF8"]]))
+        elif cmd == "\\dt":
+            print("List of relations")
+            print(render_table(["schema", "name", "type", "owner"],
+                               [["public", t, "table", "youdahe"] for t in T]))
+        elif cmd == "\\d":
+            if not arg:
+                print(render_table(["schema", "name", "type"], [["public", t, "table"] for t in T]))
+            elif arg not in T:
+                print(f'{RED}did not find any relation named "{arg}"{RST}', file=sys.stderr)
+                return 1
+            else:
+                print(f'Table "public.{arg}"')
+                print(render_table(["column", "type", "modifiers"],
+                                   [[n, ty, m + (" · primary key" if T[arg]["pk"] == n else "")]
+                                    for n, ty, m in T[arg]["cols"]]))
+        elif cmd == "\\du":
+            print(render_table(["role", "attributes"], [["youdahe", "Superuser, Create role, Create DB"]]))
+        elif cmd == "\\dn":
+            ns = self.c.get("/api/v1/nodes")["nodes"]
+            print(render_table(["node", "address", "region", "role", "status", "ranges", "store"],
+                               [[n["id"], n["addr"], n["region"], n["role"], n["status"],
+                                 n["ranges"], n["store"]] for n in ns]))
+        elif cmd == "\\dr":
+            s = self.c.get("/api/v1/storage")
+            m = s["memtable"]
+            print(f"memtable: {m['entries']}/{m['limit']} entries · {m['bytes']} B")
+            print(render_table(["level", "files", "bytes"],
+                               [[f"L{l['level']}", l["files"], f"{l['bytes']/1e6:.1f} MB"] for l in s["levels"]]))
+        elif cmd == "\\timing":
+            self.timing = not self.timing
+            print(f"Timing is {'on' if self.timing else 'off'}.")
+        elif cmd == "\\x":
+            self.expanded = not self.expanded
+            print(f"Expanded display is {'on' if self.expanded else 'off'}.")
+        elif cmd == "\\conninfo":
+            if self.c.live:
+                print(f'You are connected to database "{self.c.db}" at {self.c.base}.')
+            else:
+                print(f"{YEL}Not connected — running against the in-process mock engine.{RST}")
+        elif cmd == "\\?":
+            w = max(len(c) for c, _ in META_HELP)
+            for c, d in META_HELP:
+                print(f"  {c.ljust(w)}  {DIM}{d}{RST}")
+        elif cmd in ("\\q", "\\quit"):
+            raise EOFError
+        else:
+            print(f"{RED}invalid command {cmd} — try \\?{RST}", file=sys.stderr)
+            return 1
+        return 0
+
+    def execute(self, sql):
+        sql = sql.strip()
+        if not sql:
+            return 0
+        if sql.startswith("\\"):
+            return self.meta(sql)
+        try:
+            r = self.c.query(sql)
+        except urllib.error.URLError as e:
+            print(f"{RED}connection error: {e.reason}{RST}", file=sys.stderr)
+            return 2
+
+        if r.get("error"):
+            print(f"{RED}ERROR:{RST}  {r['error']}", file=sys.stderr)
+            return 1
+        if r.get("plan"):
+            print(r["plan"])
+        elif r.get("notice"):
+            print(r["notice"])
+        else:
+            print(render_table(r["cols"], r["rows"], self.expanded))
+        if self.timing and "ms" in r:
+            print(f"{DIM}Time: {r['ms']} ms{RST}")
+        return 0
+
+
+def repl(sess):
+    try:
+        import readline  # noqa: F401  (history + line editing when available)
+        hist = os.path.expanduser("~/.youdahedb_history")
+        try:
+            readline.read_history_file(hist)
+        except OSError:
+            pass
+    except ImportError:
+        hist = None
+
+    print(f"youdahedb-cli ({VERSION})")
+    if not sess.c.live:
+        print(f"{YEL}warning: no server at {sess.c.base} — using the mock engine{RST}")
+    print(f'Type "\\?" for help, "\\q" to quit.\n')
+
+    buf = ""
+    while True:
+        try:
+            prompt = f"{BOLD}youdahedb={RST}# " if not buf else f"{BOLD}youdahedb-{RST}# "
+            line = input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        s = line.strip()
+        if not s and not buf:
+            continue
+        if s.startswith("\\") and not buf:
+            try:
+                sess.execute(s)
+            except EOFError:
+                break
+            continue
+        buf += " " + line
+        if ";" in buf:
+            for stmt in [x for x in buf.split(";") if x.strip()]:
+                sess.execute(stmt)
+            buf = ""
+
+    if hist:
+        try:
+            readline.write_history_file(hist)
+        except OSError:
+            pass
+
+
+def main():
+    p = argparse.ArgumentParser(prog="youdahedb", add_help=True,
+                                description="psql-style client for youdaheDB")
+    p.add_argument("-c", "--command", help="run one command and exit")
+    p.add_argument("-H", "--host", default=os.environ.get("YDB_HOST", "127.0.0.1"))
+    p.add_argument("-p", "--port", type=int, default=int(os.environ.get("YDB_PORT", "8777")))
+    p.add_argument("--no-color", action="store_true")
+    p.add_argument("-V", "--version", action="version", version=f"youdahedb-cli {VERSION}")
+    a = p.parse_args()
+
+    color(not a.no_color and sys.stdout.isatty())
+    conn = Conn(a.host, a.port)
+    conn.probe()
+    sess = Session(conn)
+
+    if a.command:
+        sess.timing = False
+        sys.exit(sess.execute(a.command))
+    if not sys.stdin.isatty():
+        sess.timing = False
+        rc = 0
+        for stmt in [s for s in sys.stdin.read().split(";") if s.strip()]:
+            rc |= sess.execute(stmt)
+        sys.exit(rc)
+    repl(sess)
+
+
+if __name__ == "__main__":
+    main()
