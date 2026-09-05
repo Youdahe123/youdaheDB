@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>youdaheDB — a distributed SQL database</title>
+<meta name="description" content="A distributed SQL database with an LSM storage engine, Raft replication and the PostgreSQL wire protocol. Written from scratch in Rust with zero dependencies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+.hero{padding:70px 0 34px;text-align:center;max-width:840px;margin:0 auto}
+.hero h1{font-size:52px;line-height:1.06;margin-bottom:22px}
+.hero h1 em{font-style:normal;color:var(--t3)}
+.hero .lede{font-size:16px;margin:0 auto 30px;max-width:60ch;color:var(--t2)}
+.hero .cta{display:flex;gap:0;border:1px solid var(--line);width:fit-content;margin:0 auto}
+.hero .cta a{border:0;border-right:1px solid var(--line);padding:12px 26px;font-size:13.5px}
+.hero .cta a:last-child{border-right:0}
+
+/* ── engine demo ── */
+.engine{border:1px solid var(--line);margin:14px 0 0;background:
+  radial-gradient(ellipse at 50% 45%, rgba(57,135,229,.05), transparent 66%), #000}
+.eng-bar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.eng-bar .label{margin-right:6px}
+.op{padding:6px 14px;border:1px solid var(--line);font-family:var(--mono);font-size:11.5px;
+  color:var(--t2);cursor:pointer;transition:.13s}
+.op:hover:not(:disabled){color:var(--t0);background:var(--fill);border-color:var(--t4)}
+.op:disabled{opacity:.34;cursor:default}
+.op.on{color:#000;background:var(--t1);border-color:var(--t1)}
+.eng-bar .hint{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--t4)}
+
+.eng-body{display:grid;grid-template-columns:minmax(0,1fr) 268px}
+.eng-canvas{position:relative;height:392px}
+.eng-canvas canvas{display:block;width:100%;height:100%}
+.trace{border-left:1px solid var(--line-soft);padding:14px 16px;overflow-y:auto;height:392px}
+.trace .label{margin-bottom:11px}
+.tr-step{display:flex;gap:10px;padding:7px 0;font-family:var(--mono);font-size:11px;
+  opacity:.25;transition:opacity .2s}
+.tr-step.on{opacity:1}
+.tr-step .i{color:var(--t4);flex:0 0 15px}
+.tr-step .b{flex:1;min-width:0}
+.tr-step .t{color:var(--t1)}
+.tr-step .d{color:var(--t3);font-size:10px;margin-top:2px;display:block}
+.tr-step.hit .t{color:var(--st-good)}
+.tr-step.skip .t{color:var(--t3)}
+.tr-empty{color:var(--t4);font-family:var(--mono);font-size:11px;padding:18px 0;line-height:1.7}
+.tr-foot{border-top:1px solid var(--line-soft);margin-top:12px;padding-top:11px;
+  font-family:var(--mono);font-size:10px;color:var(--t4);line-height:1.6}
+
+/* ── sections ── */
+.feat h3{color:var(--t1);margin:11px 0 7px;font-size:15px}
+.feat p{color:var(--t2);font-size:13px;margin:0}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:26px}
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--t3);margin-bottom:13px}
+.sec h2{margin-bottom:12px}
+.sec > .lede{margin-bottom:30px}
+
+.claim{display:flex;align-items:baseline;gap:16px;padding:17px 0;border-bottom:1px solid var(--line-soft)}
+.claim .v{font-family:var(--mono);font-size:19px;color:var(--t0);flex:0 0 120px;letter-spacing:-.02em}
+.claim .t{color:var(--t2);font-size:13.5px}
+.claim .t b{color:var(--t1);font-weight:500}
+
+@media (max-width:900px){
+  .hero{padding:44px 0 24px}
+  .hero h1{font-size:34px}
+  .eng-body{grid-template-columns:1fr}
+  .trace{border-left:0;border-top:1px solid var(--line-soft);height:210px}
+  .eng-canvas{height:320px}
+}
+</style>
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <nav>
+    <a href="index.html" class="on">Overview</a>
+    <a href="start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="console.html">Console</a>
+  </nav>
+  <div class="right">
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="start.html">Get started</a>
+  </div>
+</div></header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <h1>The database that shows<br><em>you its work.</em></h1>
+    <p class="lede">A distributed SQL database with an LSM storage engine, Raft replication and the
+      PostgreSQL wire protocol — written from scratch in Rust, with zero dependencies.</p>
+    <div class="cta">
+      <a class="btn primary" href="start.html">Get started</a>
+      <a class="btn" href="console.html">Open the console</a>
+      <a class="btn" href="docs.html">Docs</a>
+    </div>
+  </section>
+
+  <!-- ── interactive engine ── -->
+  <section class="engine">
+    <div class="eng-bar">
+      <span class="label">Run an operation</span>
+      <button class="op" data-op="write">write</button>
+      <button class="op" data-op="read_hit">read · memtable hit</button>
+      <button class="op" data-op="read_disk">read · from disk</button>
+      <button class="op" data-op="flush">flush</button>
+      <button class="op" data-op="compact">compact</button>
+      <span class="hint" id="hint">click an operation to trace it through the engine</span>
+    </div>
+    <div class="eng-body">
+      <div class="eng-canvas"><canvas id="cv"></canvas></div>
+      <aside class="trace">
+        <div class="label">Path taken</div>
+        <div id="steps"><div class="tr-empty">Idle.<br>Pick an operation above and watch it move through the engine.</div></div>
+        <div class="tr-foot" id="foot"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ── what it is ── -->
+  <section class="sec">
+    <div class="kicker">Storage engine</div>
+    <h2>Sequential writes. Sorted reads. Nothing thrown away.</h2>
+    <p class="lede">Every write is a sequential append to a log that is <b>fsync</b>ed before it is
+      acknowledged. Reads walk the memtable and then immutable sorted files, newest first, skipping
+      whole files with bloom filters before touching the disk.</p>
+    <div class="grid g3 feat">
+      <div class="cell"><div class="n">01</div><h3>Durable by default</h3>
+        <p>An acknowledged write is on disk. Kill the process with <code>SIGKILL</code>, restart, and
+           the log replays everything back.</p></div>
+      <div class="cell"><div class="n">02</div><h3>Immutable on disk</h3>
+        <p>SSTables are written once and never modified. Compaction merges them and drops what is
+           dead, writing to a temp file and renaming into place.</p></div>
+      <div class="cell"><div class="n">03</div><h3>Reads that skip work</h3>
+        <p>A bloom filter answers "definitely not here" in constant time with no disk I/O, so a miss
+           costs one memory probe instead of a seek.</p></div>
+      <div class="cell"><div class="n">04</div><h3>Replicated with Raft</h3>
+        <p>Each range is its own Raft group of three replicas. Lose a node and the cluster keeps
+           serving as long as a quorum survives.</p></div>
+      <div class="cell"><div class="n">05</div><h3>Sharded by key range</h3>
+        <p>Consistent hashing with virtual nodes, a key-range router, and ranges that split and merge
+           as they grow.</p></div>
+      <div class="cell"><div class="n">06</div><h3>Speaks Postgres</h3>
+        <p>The PostgreSQL wire protocol, so <code>psql</code>, JDBC, psycopg and every ORM connect
+           without changing a line.</p></div>
+    </div>
+  </section>
+
+  <!-- ── interface ── -->
+  <section class="sec">
+    <div class="kicker">Interfaces</div>
+    <h2>Connect the way you already do</h2>
+    <p class="lede">A <code>psql</code>-compatible shell, a scriptable CLI, an embeddable Rust library,
+      and a browser console for the whole cluster.</p>
+    <div class="split">
+      <div class="code">
+        <div class="bar"><span>shell</span><span class="copy" data-copy="youdahedb -c &quot;select id, email from users limit 5&quot;">copy</span></div>
+<pre><span class="c"># start a node</span>
+<span class="k">$</span> youdahedb-server --dir ./data --port 6380
+
+<span class="c"># connect — psql muscle memory works</span>
+<span class="k">$</span> youdahedb
+youdahedb=# \dt
+youdahedb=# <span class="k">select</span> id, email <span class="k">from</span> users <span class="k">limit</span> <span class="f">5</span>;
+
+<span class="c"># one-shot, for scripts and CI</span>
+<span class="k">$</span> youdahedb -c <span class="s">"select count(*) from orders"</span>
+<span class="k">$</span> echo <span class="s">"select 1"</span> | youdahedb</pre>
+      </div>
+      <div class="code">
+        <div class="bar"><span>embedded — rust</span><span class="copy" data-copy="let mut db = LsmTree::open(&quot;./data&quot;)?;">copy</span></div>
+<pre><span class="k">use</span> youdahedb::LsmTree;
+
+<span class="k">let mut</span> db = LsmTree::open(<span class="s">"./data"</span>)?;
+
+db.put(<span class="s">"user:1"</span>, <span class="s">"youdahe"</span>)?;
+<span class="k">let</span> v = db.get(<span class="s">"user:1"</span>)?;
+db.delete(<span class="s">"user:1"</span>)?;
+
+<span class="c">// sorted iteration across memtable + every SSTable</span>
+<span class="k">for</span> (k, v) <span class="k">in</span> db.scan(<span class="s">"user:"</span>..<span class="s">"user;"</span>) {
+    <span class="f">println!</span>(<span class="s">"{k} = {v}"</span>);
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── principles ── -->
+  <section class="sec">
+    <div class="kicker">How it is built</div>
+    <h2>No dependencies. None.</h2>
+    <p class="lede">Every B-tree, hash, file format, protocol parser and thread pool is written here.
+      <code>Cargo.toml</code> has an empty <code>[dependencies]</code> section and it stays that way.</p>
+    <div>
+      <div class="claim"><span class="v">0 crates</span>
+        <span class="t">The Rust standard library and nothing else — in the database <b>and</b> its tests.</span></div>
+      <div class="claim"><span class="v">1 binary</span>
+        <span class="t">The console ships <b>inside</b> the server. No asset directory, no build step, no node_modules.</span></div>
+      <div class="claim"><span class="v">3 replicas</span>
+        <span class="t">Per range, each its own Raft group — so <b>sharding and replication stay orthogonal</b>.</span></div>
+      <div class="claim" style="border-bottom:0"><span class="v">2 orderings</span>
+        <span class="t">WAL durable before memory mutates; SSTable durable before the log clears. <b>That is the whole correctness argument.</b></span></div>
+    </div>
+  </section>
+
+  <section class="sec" style="border-bottom:0;text-align:center;padding:56px 0 40px">
+    <h2>Try it in the browser</h2>
+    <p class="lede" style="margin:12px auto 24px">The console runs a full SQL shell, schema browser,
+      cluster view and live storage internals — no install.</p>
+    <div class="hero"><div class="cta" style="padding:0">
+      <a class="btn primary" href="console.html">Open the console</a>
+      <a class="btn" href="start.html">Install locally</a>
+    </div></div>
+  </section>
+
+</main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB v0.1</span>
+  <span class="sep">/</span><a href="start.html">Get started</a>
+  <span class="sep">/</span><a href="docs.html">Docs</a>
+  <span class="sep">/</span><a href="console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">storage engine in active development</span>
+</div></footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════
+   Interactive engine diagram.
+   Nodes are hand-placed in normalised coords so the layout is
+   deliberate rather than whatever a force sim settles into.
+   ══════════════════════════════════════════════════════════════ */
+const NODES = {
+  client:  { x:.07, y:.50, r:12, label:"client",   sub:"" },
+  wal:     { x:.29, y:.19, r:15, label:"WAL",      sub:"append-only" },
+  mem:     { x:.29, y:.62, r:18, label:"memtable", sub:"sorted, in RAM" },
+  bloom:   { x:.53, y:.62, r:13, label:"bloom",    sub:"skip filter" },
+  l0:      { x:.79, y:.16, r:14, label:"L0",       sub:"6 files", lv:0 },
+  l1:      { x:.79, y:.37, r:14, label:"L1",       sub:"3 files", lv:1 },
+  l2:      { x:.79, y:.58, r:14, label:"L2",       sub:"2 files", lv:2 },
+  l3:      { x:.79, y:.79, r:14, label:"L3",       sub:"1 file",  lv:3 },
+};
+const EDGES = [
+  ["client","wal"],["client","mem"],["wal","mem"],["mem","bloom"],
+  ["mem","l0"],["bloom","l0"],["bloom","l1"],["bloom","l2"],["bloom","l3"],
+  ["l0","l1"],["l1","l2"],["l2","l3"],
+];
+
+const C = { write:"var(--cat-1)", read:"var(--cat-3)", bg:"var(--cat-2)" };
+const HEX = { write:"#3987e5", read:"#199e70", bg:"#d95926" };
+
+/* Each op is a list of hops. `note` is a structural fact about the
+   engine — how many fsyncs, how many files touched — never a timing
+   claim, because none of this is measured yet. */
+const OPS = {
+  write: { kind:"write", title:"write", steps:[
+    { from:"client", to:"wal",  t:"append to WAL",       d:"record framed and written",         dur:620 },
+    { from:"wal",    to:"wal",  t:"fsync",               d:"blocks until the disk confirms",    dur:900, hold:true },
+    { from:"wal",    to:"mem",  t:"insert into memtable",d:"only after the log is durable",     dur:620 },
+    { from:"mem",    to:"client",t:"acknowledge",        d:"the write is now crash-safe",       dur:520, hit:true },
+  ], foot:"1 fsync · 1 sequential append · 0 random writes" },
+
+  read_hit: { kind:"read", title:"read · memtable hit", steps:[
+    { from:"client", to:"mem",   t:"probe memtable",  d:"newest layer is checked first", dur:600 },
+    { from:"mem",    to:"client",t:"Found → return",  d:"no disk touched at all",        dur:520, hit:true },
+  ], foot:"0 disk reads · 0 bloom checks" },
+
+  read_disk: { kind:"read", title:"read · from disk", steps:[
+    { from:"client", to:"mem",   t:"probe memtable",     d:"NotFound → keep going",              dur:520 },
+    { from:"mem",    to:"bloom", t:"consult bloom filters", d:"one probe per SSTable, in memory", dur:520 },
+    { from:"bloom",  to:"l0",    t:"L0 · definitely not", d:"skipped, no disk I/O",   dur:380, skip:true },
+    { from:"bloom",  to:"l1",    t:"L1 · definitely not", d:"skipped, no disk I/O",   dur:380, skip:true },
+    { from:"bloom",  to:"l2",    t:"L2 · maybe",          d:"read one block from disk",           dur:620 },
+    { from:"l2",     to:"client",t:"Found → return",      d:"exactly one block read",             dur:640, hit:true },
+  ], foot:"1 disk read · 3 files skipped · 4 bloom probes" },
+
+  flush: { kind:"bg", title:"flush", steps:[
+    { from:"mem", to:"l0",  t:"write memtable → new SSTable", d:"sorted, so it is a linear walk", dur:900 },
+    { from:"l0",  to:"l0",  t:"fsync the SSTable",            d:"durable before anything else",   dur:760, hold:true },
+    { from:"l0",  to:"wal", t:"clear the WAL",                d:"only now is this safe",          dur:640, hit:true },
+  ], foot:"memtable emptied · WAL truncated · 1 new L0 file" },
+
+  compact: { kind:"bg", title:"compact", steps:[
+    { from:"l0", to:"l1", t:"k-way merge L0 → L1", d:"newest version of each key wins",   dur:820 },
+    { from:"l1", to:"l2", t:"drop tombstones",     d:"safe once nothing older holds the key", dur:760 },
+    { from:"l2", to:"l3", t:"rename into place",   d:"a crash leaves the inputs intact",  dur:760, hit:true },
+  ], foot:"reads get faster · space reclaimed · inputs untouched until rename" },
+};
+
+const SPEED = 0.55;   // global tempo for the trace animation
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const stepsEl = document.getElementById("steps"), footEl = document.getElementById("foot");
+const hintEl = document.getElementById("hint");
+let W=0, H=0, dpr = Math.min(devicePixelRatio||1, 2);
+let active = null;          // { op, stepIndex, progress }
+let visited = new Set(), pulsing = new Map(), running = false;
+
+function size(){
+  const b = cv.parentElement.getBoundingClientRect();
+  W = b.width; H = b.height;
+  cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+const px = n => ({ x: NODES[n].x*W, y: NODES[n].y*H });
+
+function draw(ts){
+  ctx.clearRect(0,0,W,H);
+  const col = active ? HEX[active.op.kind === "bg" ? "bg" : active.op.kind] : "#3987e5";
+
+  // edges
+  for (const [a,b] of EDGES){
+    const p = px(a), q = px(b);
+    const live = active && active.cur && (
+      (active.cur.from===a && active.cur.to===b) || (active.cur.from===b && active.cur.to===a));
+    ctx.strokeStyle = live ? col : "rgba(255,255,255,.085)";
+    ctx.lineWidth = live ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
+  }
+
+  // an active hop with no static edge (a return, or a causal step) — dash it
+  if (active && active.cur && active.cur.from !== active.cur.to){
+    const {from,to} = active.cur;
+    const isEdge = EDGES.some(([x,y]) => (x===from&&y===to)||(x===to&&y===from));
+    if (!isEdge){
+      const p = px(from), q = px(to);
+      ctx.save(); ctx.setLineDash([4,5]);
+      ctx.strokeStyle = col; ctx.globalAlpha = .5; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // pulse rings first, so they never wash over a label
+  for (const [id,n] of Object.entries(NODES)){
+    const pulse = pulsing.get(id); if (pulse === undefined) continue;
+    const g = Math.max(0, 1 - (ts - pulse)/900); if (g <= .05) continue;
+    const p = px(id);
+    ctx.strokeStyle = col; ctx.globalAlpha = g*.5; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(p.x, p.y, n.r + 8 + (1-g)*16, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // nodes
+  for (const [id,n] of Object.entries(NODES)){
+    const p = px(id);
+    const seen = visited.has(id);
+    const pulse = pulsing.get(id);
+    let glow = 0;
+    if (pulse !== undefined){
+      const age = ts - pulse;
+      glow = Math.max(0, 1 - age/900);
+      if (glow <= 0) pulsing.delete(id);
+    }
+    const base = n.lv !== undefined
+      ? getComputedStyle(document.documentElement).getPropertyValue(`--lv-${n.lv}`).trim()
+      : "rgba(255,255,255,.30)";
+
+    if (glow > 0){ ctx.shadowColor = col; ctx.shadowBlur = 6 + glow*26; }
+    ctx.fillStyle = glow > 0 ? col : (seen ? "rgba(255,255,255,.55)" : base);
+    ctx.beginPath(); ctx.arc(p.x, p.y, n.r + glow*3.5, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.font = "500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillStyle = glow > 0 ? "#fff" : (seen ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.55)");
+    ctx.fillText(n.label, p.x, p.y - n.r - 10);
+    if (n.sub){
+      ctx.font = "400 9.5px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillStyle = "rgba(255,255,255,.26)";
+      ctx.fillText(n.sub, p.x, p.y + n.r + 15);
+    }
+  }
+
+  // the travelling packet
+  if (active && active.cur && active.cur.from !== active.cur.to){
+    const p = px(active.cur.from), q = px(active.cur.to);
+    const raw = active.startedAt ? Math.min(1, (ts - active.startedAt)/(active.cur.dur*SPEED)) : 0;
+    const e = raw<.5 ? 2*raw*raw : 1-Math.pow(-2*raw+2,2)/2;   // ease in-out
+    const x = p.x + (q.x-p.x)*e, y = p.y + (q.y-p.y)*e;
+    // trail
+    for (let i=1;i<=5;i++){
+      const te = Math.max(0, e - i*0.035);
+      ctx.globalAlpha = (1 - i/5) * .35;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(p.x+(q.x-p.x)*te, p.y+(q.y-p.y)*te, 4.5 - i*.6, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = col; ctx.shadowBlur = 16;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  requestAnimationFrame(draw);
+}
+
+function renderSteps(op, upto){
+  stepsEl.innerHTML = op.steps.map((s,i) => `
+    <div class="tr-step ${i<=upto?"on":""} ${s.hit?"hit":""} ${s.skip?"skip":""}">
+      <span class="i">${String(i+1).padStart(2,"0")}</span>
+      <span class="b"><span class="t">${s.t}</span><span class="d">${s.d}</span></span>
+    </div>`).join("");
+}
+
+async function run(key){
+  if (running) return;
+  running = true;
+  document.querySelectorAll(".op").forEach(b => {
+    b.disabled = true; b.classList.toggle("on", b.dataset.op === key);
+  });
+  const op = OPS[key];
+  active = { op, cur:null, startedAt:0 };
+  visited = new Set(); pulsing = new Map();
+  footEl.textContent = "";
+  hintEl.textContent = `running · ${op.title}`;
+  renderSteps(op, -1);
+
+  for (let i=0;i<op.steps.length;i++){
+    const s = op.steps[i];
+    active.cur = s; active.startedAt = performance.now();
+    renderSteps(op, i);
+    visited.add(s.from);
+    pulsing.set(s.from, performance.now());
+
+    await new Promise(res => setTimeout(res, s.dur*SPEED));
+    visited.add(s.to);
+    pulsing.set(s.to, performance.now());
+    active.cur = null;
+    await new Promise(r => setTimeout(r, 70));
+  }
+
+  footEl.textContent = op.foot;
+  hintEl.textContent = "click an operation to trace it through the engine";
+  active = null; running = false;
+  document.querySelectorAll(".op").forEach(b => b.disabled = false);
+}
+
+document.querySelectorAll(".op").forEach(b => b.onclick = () => run(b.dataset.op));
+addEventListener("resize", size);
+size(); requestAnimationFrame(draw);
+
+/* copy buttons */
+document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy);
+        const t=b.textContent; b.textContent="copied"; setTimeout(()=>b.textContent=t,1200); }
+  catch { b.textContent="select manually"; }
+});
+</script>
+</body>
+</html>
