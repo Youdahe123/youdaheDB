@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get started — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+<style>
+.page{display:grid;grid-template-columns:210px minmax(0,1fr);gap:46px;padding:44px 0 80px}
+.toc{position:sticky;top:86px;align-self:start}
+.toc .label{margin-bottom:11px}
+.toc a{display:block;padding:5px 0 5px 13px;color:var(--t3);font-size:12.5px;
+  border-left:1px solid var(--line);transition:.13s}
+.toc a:hover{color:var(--t1)}
+.toc a.on{color:var(--t0);border-left-color:var(--t0)}
+
+.step{padding:0 0 40px;position:relative}
+.step + .step{border-top:1px solid var(--line-soft);padding-top:36px}
+.step .num{font-family:var(--mono);font-size:11px;color:var(--t4);letter-spacing:.14em;margin-bottom:9px}
+.step h2{margin-bottom:9px}
+.step p{color:var(--t2);max-width:70ch}
+.step .code{margin:16px 0}
+h1.big{font-size:38px;margin-bottom:14px}
+.sub{color:var(--t2);font-size:15px;max-width:66ch;margin-bottom:8px}
+.works td:first-child{color:var(--t0)}
+.next{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  border-top:1px solid var(--line-soft);border-left:1px solid var(--line-soft);margin-top:12px}
+.next a{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+  padding:18px 20px;transition:background .13s}
+.next a:hover{background:var(--fill)}
+.next a h3{color:var(--t1);margin-bottom:5px}
+.next a p{color:var(--t3);font-size:12.5px;margin:0}
+@media (max-width:880px){ .page{grid-template-columns:1fr;gap:0} .toc{display:none} }
+</style>
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="start.html" class="on">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="console.html">Console</a>
+  </nav>
+  <div class="right">
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="console.html">Open console</a>
+  </div>
+</div></header>
+
+<main class="wrap"><div class="page">
+
+  <aside class="toc">
+    <div class="label">On this page</div>
+    <a href="#reality" class="on">What works today</a>
+    <a href="#install">1 · Install</a>
+    <a href="#repl">2 · Run the REPL</a>
+    <a href="#durability">3 · Prove durability</a>
+    <a href="#cli">4 · Use the CLI</a>
+    <a href="#console">5 · Open the console</a>
+    <a href="#embed">6 · Embed the engine</a>
+    <a href="#next">Where to go next</a>
+  </aside>
+
+  <div>
+    <h1 class="big">Get started</h1>
+    <p class="sub">Clone it, build it, and write your first durable key in about two minutes.
+      No package manager, no config file, no dependencies to resolve.</p>
+
+    <section class="step" id="reality">
+      <div class="num">FIRST — THE HONEST PART</div>
+      <h2>What actually works today</h2>
+      <p>This is an early project being built in public. Rather than let you find out by trial and error,
+        here is exactly what runs right now:</p>
+      <table class="works" style="margin-top:16px">
+        <colgroup><col style="width:34%"><col style="width:20%"><col style="width:46%"></colgroup>
+        <thead><tr><th>capability</th><th>status</th><th>notes</th></tr></thead>
+        <tbody>
+          <tr><td>Write-ahead log</td><td><span class="stat-ico s-good"><i></i>working</span></td>
+              <td>fsync on every write, replays on startup</td></tr>
+          <tr><td>Memtable</td><td><span class="stat-ico s-good"><i></i>working</span></td>
+              <td>sorted, tombstones, flush threshold</td></tr>
+          <tr><td>SSTable writer</td><td><span class="stat-ico s-good"><i></i>working</span></td>
+              <td>flush, open, get — not yet reachable from the REPL</td></tr>
+          <tr><td>Interactive REPL</td><td><span class="stat-ico s-good"><i></i>working</span></td>
+              <td>put · get · delete · scan, survives restarts</td></tr>
+          <tr><td>LSM read path</td><td><span class="stat-ico s-warn"><i></i>next up</span></td>
+              <td><code>src/lsm.rs</code> — reads still only see the memtable</td></tr>
+          <tr><td>Compaction</td><td><span class="stat-ico s-idle"><i></i>planned</span></td>
+              <td>M1 · issue #4</td></tr>
+          <tr><td>Server, SQL, cluster</td><td><span class="stat-ico s-idle"><i></i>planned</span></td>
+              <td>M3–M7 — the CLI and console run on mock data until then</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="step" id="install">
+      <div class="num">STEP 1</div>
+      <h2>Install</h2>
+      <p>You need a Rust toolchain. That is the entire dependency list — <code>Cargo.toml</code> has an
+        empty <code>[dependencies]</code> section and it stays that way.</p>
+      <div class="code">
+        <div class="bar"><span>terminal</span><span class="copy" data-copy="git clone https://github.com/Youdahe123/youdaheDB.git &amp;&amp; cd youdaheDB &amp;&amp; cargo build --release">copy</span></div>
+<pre><span class="k">$</span> git clone https://github.com/Youdahe123/youdaheDB.git
+<span class="k">$</span> cd youdaheDB
+<span class="k">$</span> cargo build --release
+<span class="c">   Compiling youdaheDB v0.1.0</span>
+<span class="c">    Finished release [optimized] target(s)</span></pre>
+      </div>
+    </section>
+
+    <section class="step" id="repl">
+      <div class="num">STEP 2</div>
+      <h2>Run the REPL</h2>
+      <p>The binary starts an interactive shell. Every write goes to the write-ahead log and is
+        <code>fsync</code>ed before it is acknowledged, so an accepted write is on disk.</p>
+      <div class="code">
+        <div class="bar"><span>terminal</span><span class="copy" data-copy="cargo run">copy</span></div>
+<pre><span class="k">$</span> cargo run
+youdaheDB v0.1
+commands: put &lt;key&gt; &lt;value&gt; | get &lt;key&gt; | delete &lt;key&gt; | scan | quit
+
+db&gt; <span class="f">put user:1 youdahe</span>
+OK
+db&gt; <span class="f">put user:2 ada</span>
+OK
+db&gt; <span class="f">get user:1</span>
+youdahe
+db&gt; <span class="f">delete user:2</span>
+OK
+db&gt; <span class="f">get user:2</span>
+(deleted)
+db&gt; <span class="f">scan</span>
+  user:1 = youdahe
+  user:2 (deleted)</pre>
+      </div>
+      <p><code>get user:2</code> returning <code>(deleted)</code> rather than <code>(not found)</code> is
+        deliberate — a tombstone has to be distinguishable from a miss, or a delete would be undone by an
+        older value sitting in an SSTable underneath it.</p>
+    </section>
+
+    <section class="step" id="durability">
+      <div class="num">STEP 3</div>
+      <h2>Prove the durability claim</h2>
+      <p>Do not take the word "durable" on faith — kill the process without a clean shutdown and watch
+        the log replay.</p>
+      <div class="code">
+        <div class="bar"><span>terminal</span><span class="copy" data-copy="pkill -9 youdaheDB">copy</span></div>
+<pre><span class="c"># in another terminal, while the REPL is running:</span>
+<span class="k">$</span> pkill -9 youdaheDB
+
+<span class="c"># then start it again</span>
+<span class="k">$</span> cargo run
+<span class="s">recovered 2 entries from WAL</span>
+youdaheDB v0.1
+
+db&gt; <span class="f">get user:1</span>
+youdahe   <span class="c">← still there after SIGKILL</span></pre>
+      </div>
+      <p>The data file is <code>data.wal</code> in the working directory. Delete it and you start clean.
+        Automating this loop is issue
+        <a href="https://github.com/Youdahe123/youdaheDB/issues/13" target="_blank" rel="noopener"
+           style="color:var(--t1);border-bottom:1px solid var(--t4)">#13</a>.</p>
+    </section>
+
+    <section class="step" id="cli">
+      <div class="num">STEP 4</div>
+      <h2>Use the CLI</h2>
+      <p>The client is a <code>psql</code> workalike. It is scriptable, pipe-friendly, and returns real
+        exit codes — <code>0</code> ok, <code>1</code> query error, <code>2</code> connection error.</p>
+      <div class="code">
+        <div class="bar"><span>terminal</span><span class="copy" data-copy="./cli/youdahedb">copy</span></div>
+<pre><span class="c"># interactive</span>
+<span class="k">$</span> ./cli/youdahedb
+youdahedb=# <span class="f">\dt</span>
+youdahedb=# <span class="f">select id, email from users limit 3;</span>
+
+<span class="c"># one-shot, for scripts and CI</span>
+<span class="k">$</span> ./cli/youdahedb -c <span class="s">"select count(*) from orders"</span>
+
+<span class="c"># from a pipe</span>
+<span class="k">$</span> echo <span class="s">"select 1"</span> | ./cli/youdahedb
+
+<span class="c"># point at another node</span>
+<span class="k">$</span> ./cli/youdahedb --host 10.0.1.11 --port 8080</pre>
+      </div>
+      <div class="notice"><b>Running on mock data.</b> The CLI speaks the HTTP API in
+        <code>web/API.md</code>, which no server implements yet. Until issue
+        <a href="https://github.com/Youdahe123/youdaheDB/issues/19" target="_blank" rel="noopener">#19</a>
+        lands it falls back to an in-process mock so the command surface can be designed and used first.
+        It prints a warning on startup so you always know which one you are talking to.</div>
+    </section>
+
+    <section class="step" id="console">
+      <div class="num">STEP 5</div>
+      <h2>Open the console</h2>
+      <p>A browser console for the whole database — SQL shell, schema, cluster nodes, ranges,
+        transactions, LSM storage, jobs and metrics.</p>
+      <div class="code">
+        <div class="bar"><span>terminal</span><span class="copy" data-copy="python3 -m http.server 8777 --directory web">copy</span></div>
+<pre><span class="k">$</span> python3 -m http.server 8777 --directory web
+<span class="c"># then open http://127.0.0.1:8777/console.html</span></pre>
+      </div>
+      <p>Every view carries a badge saying whether it is <b>live</b>, <b>partly wired</b> or <b>planned</b>,
+        with links to the issues that would make it real. Nothing in there pretends to be finished.</p>
+      <p style="margin-top:14px"><a class="btn primary" href="console.html">Open the console →</a></p>
+    </section>
+
+    <section class="step" id="embed">
+      <div class="num">STEP 6</div>
+      <h2>Embed the engine</h2>
+      <p>The storage engine is a library first and a server second. This is the API that
+        <a href="https://github.com/Youdahe123/youdaheDB/issues/3" target="_blank" rel="noopener"
+           style="color:var(--t1);border-bottom:1px solid var(--t4)">issue #3</a> introduces.</p>
+      <div class="code">
+        <div class="bar"><span>rust</span><span class="copy" data-copy="let mut db = LsmTree::open(&quot;./data&quot;)?;">copy</span></div>
+<pre><span class="k">use</span> youdahedb::LsmTree;
+
+<span class="k">fn</span> <span class="f">main</span>() -&gt; std::io::Result&lt;()&gt; {
+    <span class="c">// opens the dir, loads SSTables newest-first, replays the WAL</span>
+    <span class="k">let mut</span> db = LsmTree::open(<span class="s">"./data"</span>)?;
+
+    db.put(<span class="s">"user:1"</span>, <span class="s">"youdahe"</span>)?;
+    <span class="k">let</span> v = db.get(<span class="s">"user:1"</span>)?;
+    db.delete(<span class="s">"user:1"</span>)?;
+
+    <span class="c">// sorted iteration across memtable + every SSTable</span>
+    <span class="k">for</span> (k, v) <span class="k">in</span> db.scan(<span class="s">"user:"</span>..<span class="s">"user;"</span>) {
+        <span class="f">println!</span>(<span class="s">"{k} = {v}"</span>);
+    }
+    <span class="k">Ok</span>(())
+}</pre>
+      </div>
+      <div class="notice"><b>Not yet on crates.io.</b> <code>LsmTree</code> is the next thing being built —
+        today <code>main.rs</code> drives the WAL and memtable directly and SSTables are not reachable from it.</div>
+    </section>
+
+    <section class="step" id="next" style="padding-bottom:0">
+      <div class="num">NEXT</div>
+      <h2>Where to go from here</h2>
+      <div class="next">
+        <a href="docs.html#architecture"><h3>Architecture →</h3><p>How the layers fit together, and the orderings that make them correct.</p></a>
+        <a href="docs.html#api"><h3>API reference →</h3><p>Every endpoint the console and CLI speak.</p></a>
+        <a href="docs.html#cli"><h3>CLI reference →</h3><p>Flags, meta-commands, exit codes.</p></a>
+        <a href="https://github.com/Youdahe123/youdaheDB/issues" target="_blank" rel="noopener">
+          <h3>The roadmap →</h3><p>58 issues, 8 milestones, every build order written down.</p></a>
+      </div>
+    </section>
+  </div>
+</div></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="docs.html">Docs</a>
+  <span class="sep">/</span><a href="console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy);
+        const t=b.textContent; b.textContent="copied"; setTimeout(()=>b.textContent=t,1200); }
+  catch { b.textContent = "select manually"; }
+});
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-80px 0px -70% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+</body>
+</html>
