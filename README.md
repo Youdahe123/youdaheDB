@@ -101,6 +101,82 @@ That single guarantee is what the rest of the engine is built around.
 
 ---
 
+## Sharing the engine between threads
+
+The Rust executable and library use `Engine`, a clonable handle sharing one
+`Arc<RwLock<LsmTree>>`. Open a data directory once, then clone the handle:
+
+```rust
+use youdaheDB::Engine;
+
+fn main() -> std::io::Result<()> {
+    let db = Engine::open("data")?;
+    let writer = db.clone();
+    std::thread::spawn(move || writer.put("user:1", "alice"))
+        .join().expect("writer panicked")?;
+    assert_eq!(db.get("user:1")?, Some("alice".to_string()));
+    Ok(())
+}
+```
+
+`get`, `scan`, and `sstable_count` share a read lock. `put`, `delete`, and
+`flush` take the exclusive write lock, including WAL synchronization and any
+automatic flush. Multiple readers can run together; a writer excludes all
+other operations. Scheduling fairness is determined by the platform's
+`RwLock`; no bounded writer-wait guarantee is made.
+
+`scan()` returns `io::Result<Vec<(String, String)>>`: it collects a sorted,
+consistent view under the read lock and releases the lock before returning.
+Writers wait during collection, and result memory grows with the live dataset.
+Processing the returned rows holds no lock. If a writer panics while holding
+the lock, subsequent operations return an `io::Error` identifying the poisoned
+lock. Individual operations are synchronized; a sequence of calls is not a
+transaction.
+
+This API coordinates threads sharing one handle. It does not lock a directory
+against independent `Engine::open` calls or other processes. It does not add
+background flushes, group commit, or stronger crash guarantees to the existing
+storage engine.
+
+### Contention measurement
+
+Run the opt-in benchmark (excluded from normal tests):
+
+```bash
+cargo test --release contention_benchmark -- --ignored --nocapture
+# Optional: change the total operations per scenario (default 10000)
+YOUDAHEDB_BENCH_OPS=50000 cargo test --release contention_benchmark -- --ignored --nocapture
+```
+
+Each scenario starts with 256 keys, 128-byte values, and one flushed SSTable
+in a temporary directory. It executes a deterministic sequence of reads or
+90% reads / 10% overwrites across 1, 8, and 16 threads. Setup is excluded from
+timing. The test measures the same lock helpers and tree operations as
+`Engine::get`/`put`, separating lock acquisition from total operation latency
+without adding production instrumentation. It reports p50/p95/p99 for both.
+Thread scheduling and measured times are not deterministic.
+
+Example local run, September 6, 2026: Apple M1, 8 GiB RAM, macOS 14.6.1,
+Homebrew Rust 1.98.0, release build, 10,000 operations per scenario:
+
+| Threads | Reads | Ops/sec | Operation p50 / p95 / p99 (µs) | Lock wait p50 / p95 / p99 (µs) |
+|---|---|---|---|---|
+| 1 | 100% | 63,605 | 14.959 / 15.792 / 23.417 | 0.042 / 0.042 / 0.042 |
+| 8 | 100% | 115,986 | 59.083 / 129.875 / 207.833 | 0.042 / 0.125 / 0.250 |
+| 16 | 100% | 121,405 | 54.416 / 590.292 / 1,152.791 | 0.042 / 0.166 / 0.250 |
+| 1 | 90% | 2,634 | 0.291 / 3,965.875 / 4,078.708 | 0.042 / 0.125 / 0.250 |
+| 8 | 90% | 2,672 | 1.041 / 14,948.375 / 39,900.792 | 0.125 / 12,147.792 / 38,910.625 |
+| 16 | 90% | 2,688 | 1.208 / 30,907.000 / 76,078.959 | 0.166 / 29,960.750 / 75,788.583 |
+
+In this run, concurrent reads increased throughput, while mixed throughput
+stayed roughly flat and tail lock waits grew. Every overwrite synchronizes
+the WAL under the write lock. These are illustrative single-run measurements
+on a development laptop, not a comparison with another database or a speedup
+claim over the old implementation. The small read dataset benefits from OS
+caching; overwrites move keys into the memtable, so the two workloads have
+different read paths. There is no network, compaction, or timed flush workload.
+Repeat on your hardware before choosing finer locks or group commit.
+
 ## Storage engine
 
 ### The write path
