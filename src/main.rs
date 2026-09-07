@@ -1,17 +1,11 @@
-mod wal;
-mod memtable;
-mod sstable;
-mod merge;
-mod lsm;
-
-use lsm::LsmTree;
 use std::io::{self, BufRead};
+use youdaheDB::Engine;
 
 const DATA_DIR: &str = "data";
 
 fn main() -> io::Result<()> {
     // open replays the wal and loads existing sstables
-    let mut db = LsmTree::open(DATA_DIR)?;
+    let db = Engine::open(DATA_DIR)?;
 
     println!("youdaheDB v0.1");
     println!("commands: put <key> <value> | get <key> | delete <key> | scan | flush | quit");
@@ -64,7 +58,8 @@ fn main() -> io::Result<()> {
 
             "scan" => {
                 let mut count = 0;
-                for entry in db.scan()? {
+                let scan = db.scan()?;
+                for entry in scan.iter()? {
                     let (key, value) = entry?;
                     println!("  {} = {}", key, value);
                     count += 1;
@@ -76,7 +71,7 @@ fn main() -> io::Result<()> {
 
             "flush" => {
                 db.flush()?;
-                println!("OK · {} sstable(s)", db.sstable_count());
+                println!("OK · {} sstable(s)", db.sstable_count()?);
             }
 
             "quit" | "exit" => {
