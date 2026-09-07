@@ -58,7 +58,9 @@ fn main() -> io::Result<()> {
 
             "scan" => {
                 let mut count = 0;
-                for (key, value) in db.scan()? {
+                let scan = db.scan()?;
+                for entry in scan.iter()? {
+                    let (key, value) = entry?;
                     println!("  {} = {}", key, value);
                     count += 1;
                 }
