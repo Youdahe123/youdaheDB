@@ -5,15 +5,35 @@ use crate::lsm::LsmTree;
 
 /// A shared database: concurrent readers, one exclusive writer.
 ///
-/// Clones share the same tree and lock. Open each directory only once; this
-/// lock does not coordinate separate opens or separate processes.
+/// Clones share the same tree and lock. A second open of the same directory
+/// fails with `io::ErrorKind::WouldBlock`, including from another process.
 #[derive(Clone)]
 pub struct Engine {
     inner: Arc<RwLock<LsmTree>>,
 }
 
+/// A consistent read view that streams entries without collecting the dataset.
+///
+/// Holds a read lock until dropped, including after an iterator is exhausted.
+/// Keep its scope short: writers wait for this guard. Do not call other Engine
+/// methods while holding it (even a recursive read can deadlock behind a queued
+/// writer on some platforms). Use `iter()` to read this view instead.
+#[must_use = "a scan guard holds a read lock until dropped"]
+pub struct Scan<'a> {
+    tree: RwLockReadGuard<'a, LsmTree>,
+}
+
+impl Scan<'_> {
+    /// Streams sorted live entries, retaining only the merge iterator's state.
+    /// I/O errors can occur both when opening the sources and while iterating.
+    pub fn iter(&self) -> io::Result<impl Iterator<Item = io::Result<(String, String)>> + '_> {
+        self.tree.scan()
+    }
+}
+
 impl Engine {
-    /// Opens existing data and replays its write-ahead log.
+    /// Exclusively opens a directory and replays its write-ahead log.
+    /// The directory becomes available again when the last clone is dropped.
     pub fn open(dir: &str) -> io::Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(LsmTree::open(dir)?)),
@@ -21,15 +41,27 @@ impl Engine {
     }
 
     fn read(&self) -> io::Result<RwLockReadGuard<'_, LsmTree>> {
-        self.inner
+        #[cfg(test)]
+        let start = std::time::Instant::now();
+        let result = self
+            .inner
             .read()
-            .map_err(|_| io::Error::other("engine lock poisoned"))
+            .map_err(|_| io::Error::other("engine lock poisoned"));
+        #[cfg(test)]
+        benchmark::record_wait(start.elapsed());
+        result
     }
 
     fn write(&self) -> io::Result<RwLockWriteGuard<'_, LsmTree>> {
-        self.inner
+        #[cfg(test)]
+        let start = std::time::Instant::now();
+        let result = self
+            .inner
             .write()
-            .map_err(|_| io::Error::other("engine lock poisoned"))
+            .map_err(|_| io::Error::other("engine lock poisoned"));
+        #[cfg(test)]
+        benchmark::record_wait(start.elapsed());
+        result
     }
 
     /// Reads the newest value, or `None` for a missing or deleted key.
@@ -38,6 +70,7 @@ impl Engine {
     }
 
     /// Writes durably before returning. Holds the write lock through any flush.
+    /// An I/O error does not guarantee that the write was rolled back.
     pub fn put(&self, key: &str, value: &str) -> io::Result<()> {
         self.write()?.put(key, value)
     }
@@ -47,14 +80,27 @@ impl Engine {
         self.write()?.delete(key)
     }
 
-    /// Collects a consistent, sorted view of all live entries.
+    /// Locks a consistent view of all live entries for streaming.
     ///
-    /// Writers wait until collection finishes. The returned values own their
-    /// memory and hold no lock; memory usage grows with the result size.
-    pub fn scan(&self) -> io::Result<Vec<(String, String)>> {
-        let tree = self.read()?;
-        let entries = tree.scan()?.collect();
-        entries
+    /// Drop the returned [`Scan`] to allow writers to proceed. See its docs for
+    /// lock lifetime and reentrancy restrictions.
+    ///
+    /// ```no_run
+    /// # fn main() -> std::io::Result<()> {
+    /// let db = youdaheDB::Engine::open("data")?;
+    /// {
+    ///     let scan = db.scan()?;
+    ///     for entry in scan.iter()? {
+    ///         let (key, value) = entry?;
+    ///         println!("{key} = {value}");
+    ///     }
+    /// } // releases the read lock before the next write
+    /// db.put("key", "value")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn scan(&self) -> io::Result<Scan<'_>> {
+        Ok(Scan { tree: self.read()? })
     }
 
     /// Flushes the current memtable while excluding other operations.
@@ -70,3 +116,6 @@ impl Engine {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod benchmark;

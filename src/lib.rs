@@ -23,4 +23,4 @@ mod merge;
 mod sstable;
 mod wal;
 
-pub use engine::Engine;
+pub use engine::{Engine, Scan};

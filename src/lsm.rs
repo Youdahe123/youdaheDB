@@ -29,12 +29,31 @@ pub struct LsmTree {
     memtable: MemTable,
     sstables: Vec<SSTable>, // newest first
     next_id: u64,
+    // Keep the OS lock until after the WAL and tables have been dropped.
+    // Never unlink LOCK: a new inode would allow two independent owners.
+    _directory_lock: fs::File,
 }
 
 impl LsmTree {
     pub fn open(dir: &str) -> io::Result<LsmTree> {
         let dir = PathBuf::from(dir);
         fs::create_dir_all(&dir)?;
+
+        // Acquire ownership before reading recovery state or opening the WAL.
+        // The OS releases the lock on close or process death; the file remains.
+        let directory_lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(dir.join("LOCK"))?;
+        directory_lock.try_lock().map_err(|error| match error {
+            fs::TryLockError::WouldBlock => io::Error::new(
+                io::ErrorKind::WouldBlock,
+                format!("database directory is already open: {}", dir.display()),
+            ),
+            fs::TryLockError::Error(error) => error,
+        })?;
 
         let mut ids: Vec<u64> = fs::read_dir(&dir)?
             .filter_map(|entry| sst_id(&entry.ok()?.path()))
@@ -50,7 +69,10 @@ impl LsmTree {
 
         let wal_path = dir.join(WAL_NAME);
         let wal_path = wal_path.to_str().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "data directory is not valid utf-8")
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "data directory is not valid utf-8",
+            )
         })?;
 
         // rebuild whatever was in the memtable when the process died
@@ -68,6 +90,7 @@ impl LsmTree {
             memtable,
             sstables,
             next_id,
+            _directory_lock: directory_lock,
         })
     }
 
@@ -376,7 +399,10 @@ mod tests {
             db.put(&format!("key{i}"), "value").unwrap();
         }
 
-        assert!(db.sstable_count() > 0, "writes should have triggered a flush");
+        assert!(
+            db.sstable_count() > 0,
+            "writes should have triggered a flush"
+        );
         assert_eq!(db.get("key0").unwrap(), Some("value".to_string()));
         assert_eq!(db.get("key9").unwrap(), Some("value".to_string()));
         fs::remove_dir_all(&dir).unwrap();

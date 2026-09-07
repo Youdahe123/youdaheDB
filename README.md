@@ -104,7 +104,8 @@ That single guarantee is what the rest of the engine is built around.
 ## Sharing the engine between threads
 
 The Rust executable and library use `Engine`, a clonable handle sharing one
-`Arc<RwLock<LsmTree>>`. Open a data directory once, then clone the handle:
+`Arc<RwLock<LsmTree>>`. Requires Rust 1.89 or newer, with zero external crates.
+Open a data directory once, then clone the handle:
 
 ```rust
 use youdaheDB::Engine;
@@ -125,18 +126,47 @@ automatic flush. Multiple readers can run together; a writer excludes all
 other operations. Scheduling fairness is determined by the platform's
 `RwLock`; no bounded writer-wait guarantee is made.
 
-`scan()` returns `io::Result<Vec<(String, String)>>`: it collects a sorted,
-consistent view under the read lock and releases the lock before returning.
-Writers wait during collection, and result memory grows with the live dataset.
-Processing the returned rows holds no lock. If a writer panics while holding
-the lock, subsequent operations return an `io::Error` identifying the poisoned
-lock. Individual operations are synchronized; a sequence of calls is not a
-transaction.
+`scan()` returns a `Scan` guard. Its `iter()` method streams the existing merge
+iterator, so the engine does not allocate a second copy of the entire dataset.
+The guard retains a consistent view by holding the read lock. Writers wait
+until the **guard is dropped**, even if its iterator is exhausted or dropped:
 
-This API coordinates threads sharing one handle. It does not lock a directory
-against independent `Engine::open` calls or other processes. It does not add
-background flushes, group commit, or stronger crash guarantees to the existing
-storage engine.
+```rust
+fn example(db: &youdaheDB::Engine) -> std::io::Result<()> {
+    {
+        let scan = db.scan()?;
+        for entry in scan.iter()? {
+            let (key, value) = entry?;
+            println!("{key} = {value}");
+        }
+    } // read lock released here; an early return also releases it
+    db.put("key", "value")?;
+    Ok(())
+}
+```
+
+Keep scan scopes short. Do not call other `Engine` methods while holding a
+scan guard: writes would deadlock, and even recursive reads can deadlock if
+a writer is queued. Slow output from the REPL can hold a scan open longer.
+I/O failures are returned from `iter()` or from individual iterator entries.
+Callers that need owned results may explicitly collect the iterator.
+
+The storage layer acquires an exclusive OS lock on `data/LOCK` **before**
+loading tables or replaying the WAL. A second open, in the same process or
+another process, returns `io::ErrorKind::WouldBlock`. Ownership lasts until
+the last shared handle is dropped; process termination also releases it.
+The empty `LOCK` file deliberately remains on disk. Do not delete it while
+the database is open: recreating it would bypass ownership of the original
+file. This uses [standard-library file locking](https://doc.rust-lang.org/std/fs/struct.File.html#method.try_lock);
+it coordinates cooperating engines on filesystems supporting that facility,
+and cannot prevent older binaries or other programs from modifying the files.
+
+If a writer panics while holding the thread lock, subsequent operations return
+an error identifying the poisoned lock. Ordinary I/O errors do not poison it
+and do not promise rollback: a failed write may already have reached the WAL
+or memory. Individual operations are synchronized; multiple calls are not a
+transaction. Background flushes, group commit, and crash-recovery hardening
+remain separate storage roadmap work.
 
 ### Contention measurement
 
@@ -144,38 +174,31 @@ Run the opt-in benchmark (excluded from normal tests):
 
 ```bash
 cargo test --release contention_benchmark -- --ignored --nocapture
-# Optional: change the total operations per scenario (default 10000)
-YOUDAHEDB_BENCH_OPS=50000 cargo test --release contention_benchmark -- --ignored --nocapture
+# Optional: configure dataset and repetitions
+YOUDAHEDB_BENCH_OPS=10000 YOUDAHEDB_BENCH_KEYS=65536 YOUDAHEDB_BENCH_VALUE_BYTES=512 YOUDAHEDB_BENCH_REPEATS=5 cargo test --release contention_benchmark -- --ignored --nocapture
 ```
 
-Each scenario starts with 256 keys, 128-byte values, and one flushed SSTable
-in a temporary directory. It executes a deterministic sequence of reads or
-90% reads / 10% overwrites across 1, 8, and 16 threads. Setup is excluded from
-timing. The test measures the same lock helpers and tree operations as
-`Engine::get`/`put`, separating lock acquisition from total operation latency
-without adding production instrumentation. It reports p50/p95/p99 for both.
-Thread scheduling and measured times are not deterministic.
+Defaults are 5,000 operations per scenario, 16,384 keys, 256-byte values, and
+three repetitions. Each scenario starts with a fresh copy of the same SSTable
+and an empty memtable/WAL. Fixture construction, copying, and opening are
+excluded from timing. Workloads use a fixed operation/key sequence, either
+100% reads or 90% reads / 10% overwrites. Thread scheduling is not deterministic.
 
-Example local run, September 6, 2026: Apple M1, 8 GiB RAM, macOS 14.6.1,
-Homebrew Rust 1.98.0, release build, 10,000 operations per scenario:
+The harness calls **public `Engine::get` and `Engine::put`**, at 1, 8, and 16
+threads, and compares with a direct single-threaded `LsmTree` baseline. It
+reports throughput plus separate read and write p50/p95/p99 operation latency
+and lock-acquisition latency for every repetition. Lock timing uses test-only
+instrumentation; production builds have no timing overhead. The direct
+baseline has no thread lock and reports zero lock wait.
 
-| Threads | Reads | Ops/sec | Operation p50 / p95 / p99 (µs) | Lock wait p50 / p95 / p99 (µs) |
-|---|---|---|---|---|
-| 1 | 100% | 63,605 | 14.959 / 15.792 / 23.417 | 0.042 / 0.042 / 0.042 |
-| 8 | 100% | 115,986 | 59.083 / 129.875 / 207.833 | 0.042 / 0.125 / 0.250 |
-| 16 | 100% | 121,405 | 54.416 / 590.292 / 1,152.791 | 0.042 / 0.166 / 0.250 |
-| 1 | 90% | 2,634 | 0.291 / 3,965.875 / 4,078.708 | 0.042 / 0.125 / 0.250 |
-| 8 | 90% | 2,672 | 1.041 / 14,948.375 / 39,900.792 | 0.125 / 12,147.792 / 38,910.625 |
-| 16 | 90% | 2,688 | 1.208 / 30,907.000 / 76,078.959 | 0.166 / 29,960.750 / 75,788.583 |
-
-In this run, concurrent reads increased throughput, while mixed throughput
-stayed roughly flat and tail lock waits grew. Every overwrite synchronizes
-the WAL under the write lock. These are illustrative single-run measurements
-on a development laptop, not a comparison with another database or a speedup
-claim over the old implementation. The small read dataset benefits from OS
-caching; overwrites move keys into the memtable, so the two workloads have
-different read paths. There is no network, compaction, or timed flush workload.
-Repeat on your hardware before choosing finer locks or group commit.
+Results and interpretation are in [the contention report](docs/contention.md).
+This remains a local microbenchmark: the dataset fits in RAM, OS caching is
+uncontrolled, execution order is fixed, and clock instrumentation adds overhead
+to the shared API. Overwrites move some keys into memory. Default timed writes
+do not fill the memtable, so these measurements do not cover flush stalls,
+large streaming scans, networking, or compaction. They do not replace the
+broader benchmark harness planned in issue #14. Repeat with your workload
+before choosing finer locks or group commit.
 
 ## Storage engine
 

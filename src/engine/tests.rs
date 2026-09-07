@@ -4,22 +4,26 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Barrier};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-struct TestDir(PathBuf);
+pub(super) struct TestDir(pub(super) PathBuf);
 
 impl TestDir {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let path = std::env::temp_dir().join(format!(
-            "youdahedb-engine-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&path).unwrap();
-        Self(path)
+        loop {
+            let path = std::env::temp_dir().join(format!(
+                "youdahedb-engine-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => panic!("create test directory: {e}"),
+            }
+        }
     }
-
     fn open(&self) -> Engine {
         Engine::open(self.0.to_str().unwrap()).unwrap()
     }
@@ -27,8 +31,22 @@ impl TestDir {
 
 impl Drop for TestDir {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
+        if let Err(error) = fs::remove_dir_all(&self.0) {
+            eprintln!(
+                "could not clean test directory {}: {error}",
+                self.0.display()
+            );
+        }
     }
+}
+
+fn rows(db: &Engine) -> Vec<(String, String)> {
+    db.scan()
+        .unwrap()
+        .iter()
+        .unwrap()
+        .collect::<io::Result<_>>()
+        .unwrap()
 }
 
 #[test]
@@ -48,7 +66,6 @@ fn readers_overlap_and_exclude_a_writer() {
     let worker = thread::spawn(move || {
         send.send(other.get("key")).unwrap();
     });
-    // The first read guard is still alive when the second reader completes.
     let result = recv.recv_timeout(Duration::from_secs(5));
     assert!(matches!(
         db.inner.try_write(),
@@ -61,18 +78,80 @@ fn readers_overlap_and_exclude_a_writer() {
 }
 
 #[test]
-fn scan_results_are_owned_and_release_the_lock() {
+fn scan_blocks_writer_and_early_drop_allows_progress() {
     let dir = TestDir::new();
     let db = dir.open();
     db.put("a", "old").unwrap();
+    db.put("b", "old").unwrap();
     db.flush().unwrap();
-    db.put("b", "deleted").unwrap();
-    db.delete("b").unwrap();
-    let snapshot = db.scan().unwrap();
+    let scan = db.scan().unwrap();
+    let mut entries = scan.iter().unwrap();
+    assert_eq!(entries.next().unwrap().unwrap(), ("a".into(), "old".into()));
+    let other = db.clone();
+    let (attempt_tx, attempt_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        let blocked = matches!(
+            other.inner.try_write(),
+            Err(std::sync::TryLockError::WouldBlock)
+        );
+        attempt_tx.send(blocked).unwrap();
+        done_tx.send(other.put("b", "new")).unwrap();
+    });
+    assert!(attempt_rx.recv_timeout(Duration::from_secs(5)).unwrap());
+    assert!(matches!(done_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    // Re-iterating this guard acquires no recursive lock. The queued writer
+    // cannot change the view between its first and last row.
+    assert_eq!(
+        scan.iter()
+            .unwrap()
+            .collect::<io::Result<Vec<_>>>()
+            .unwrap(),
+        vec![("a".into(), "old".into()), ("b".into(), "old".into())]
+    );
+    drop(entries); // abandon the scan before its last row
+    assert!(matches!(
+        db.inner.try_write(),
+        Err(std::sync::TryLockError::WouldBlock)
+    ));
+    drop(scan);
+    done_rx
+        .recv_timeout(Duration::from_secs(5))
+        .unwrap()
+        .unwrap();
+    worker.join().unwrap();
+    assert_eq!(db.get("b").unwrap(), Some("new".into()));
+}
+
+#[test]
+fn scan_streams_rows_before_a_later_disk_error_and_releases_on_drop() {
+    let dir = TestDir::new();
+    let db = dir.open();
+    db.put("a", "first").unwrap();
+    db.put("b", "corrupt-me").unwrap();
+    db.flush().unwrap();
+    let path = dir.0.join("sst-000000.sst");
+    let mut bytes = fs::read(&path).unwrap();
+    let offset = bytes
+        .windows(b"corrupt-me".len())
+        .position(|b| b == b"corrupt-me")
+        .unwrap();
+    bytes[offset] = 0xff; // invalid UTF-8 in the second value, not its index
+    fs::write(path, bytes).unwrap();
+    {
+        let scan = db.scan().unwrap();
+        let mut entries = scan.iter().unwrap();
+        assert_eq!(
+            entries.next().unwrap().unwrap(),
+            ("a".into(), "first".into())
+        );
+        assert_eq!(
+            entries.next().unwrap().unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+    }
     assert!(db.inner.try_write().is_ok());
-    db.put("a", "new").unwrap();
-    assert_eq!(snapshot, vec![("a".into(), "old".into())]);
-    assert_eq!(db.scan().unwrap(), vec![("a".into(), "new".into())]);
+    db.put("new", "value").unwrap();
 }
 
 #[test]
@@ -90,7 +169,7 @@ fn poisoned_writer_returns_errors_from_every_operation() {
         db.get("k").unwrap_err(),
         db.put("k", "v").unwrap_err(),
         db.delete("k").unwrap_err(),
-        db.scan().unwrap_err(),
+        db.scan().err().unwrap(),
         db.flush().unwrap_err(),
         db.sstable_count().unwrap_err(),
     ];
@@ -101,143 +180,120 @@ fn poisoned_writer_returns_errors_from_every_operation() {
 }
 
 #[test]
-fn concurrent_reads_writes_deletes_and_flushes_survive_reopen() {
+fn competing_writes_deletes_scans_and_flushes_survive_reopen() {
     const WRITERS: usize = 4;
     const READERS: usize = 4;
-    const KEYS: usize = 32;
+    const ROUNDS: usize = 24;
     let dir = TestDir::new();
     let db = dir.open();
-    let start = Arc::new(Barrier::new(WRITERS + READERS));
+    let phase = Arc::new(Barrier::new(WRITERS + READERS));
     thread::scope(|scope| {
         for writer in 0..WRITERS {
             let db = db.clone();
-            let start = start.clone();
+            let phase = phase.clone();
             scope.spawn(move || {
-                start.wait();
-                for n in 0..KEYS {
-                    let key = format!("{writer}:{n:03}");
-                    db.put(&key, "old").unwrap();
-                    db.put(&key, &key).unwrap();
-                    if n % 2 == 0 {
-                        db.delete(&key).unwrap();
+                for round in 0..ROUNDS {
+                    phase.wait();
+                    if round % 2 == 0 {
+                        db.put("shared", &format!("{round}:{writer}")).unwrap();
+                    } else {
+                        db.delete("shared").unwrap();
                     }
-                    if n % 8 == 0 {
+                    db.put(&format!("writer:{writer}"), &round.to_string())
+                        .unwrap();
+                    if writer == 0 {
                         db.flush().unwrap();
                     }
+                    phase.wait(); // all writes in this round have completed
+                    phase.wait(); // every reader verified this round
                 }
             });
         }
         for _ in 0..READERS {
             let db = db.clone();
-            let start = start.clone();
+            let phase = phase.clone();
             scope.spawn(move || {
-                start.wait();
-                for _ in 0..KEYS {
-                    if let Some(value) = db.get("0:001").unwrap() {
-                        assert!(value == "old" || value == "0:001");
+                for round in 0..ROUNDS {
+                    phase.wait();
+                    for _ in 0..4 {
+                        if let Some(value) = db.get("shared").unwrap() {
+                            let visible_round: usize =
+                                value.split(':').next().unwrap().parse().unwrap();
+                            assert_eq!(
+                                visible_round,
+                                if round % 2 == 0 { round } else { round - 1 }
+                            );
+                        }
+                        let view = rows(&db);
+                        assert!(view.windows(2).all(|w| w[0].0 < w[1].0));
                     }
-                    let rows = db.scan().unwrap();
-                    assert!(rows.windows(2).all(|w| w[0].0 < w[1].0));
-                    assert!(rows.iter().all(|(k, v)| v == "old" || k == v));
+                    phase.wait();
+                    let value = db.get("shared").unwrap();
+                    if round % 2 == 0 {
+                        assert!(value.unwrap().starts_with(&format!("{round}:")));
+                    } else {
+                        assert_eq!(value, None);
+                        assert!(!rows(&db).iter().any(|(k, _)| k == "shared"));
+                    }
+                    phase.wait();
                 }
             });
         }
     });
-    let expected: Vec<_> = (0..WRITERS)
-        .flat_map(|w| {
-            (0..KEYS).filter(|n| n % 2 == 1).map(move |n| {
-                let key = format!("{w}:{n:03}");
-                (key.clone(), key)
-            })
-        })
-        .collect();
-    assert_eq!(db.scan().unwrap(), expected);
-    assert!(db.sstable_count().unwrap() > 0);
+    db.put("unflushed", "survives").unwrap();
+    let expected = rows(&db);
+    for writer in 0..WRITERS {
+        assert_eq!(
+            db.get(&format!("writer:{writer}")).unwrap(),
+            Some((ROUNDS - 1).to_string())
+        );
+    }
     drop(db);
     let reopened = dir.open();
-    assert_eq!(reopened.scan().unwrap(), expected);
-    for w in 0..WRITERS {
-        for n in (0..KEYS).step_by(2) {
-            assert_eq!(reopened.get(&format!("{w}:{n:03}")).unwrap(), None);
-        }
-    }
+    assert_eq!(rows(&reopened), expected);
+    assert_eq!(reopened.get("shared").unwrap(), None);
+    assert_eq!(reopened.get("unflushed").unwrap(), Some("survives".into()));
 }
 
-fn percentile(samples: &mut [u128], percentile: usize) -> u128 {
-    samples.sort_unstable();
-    samples[(samples.len() - 1) * percentile / 100]
-}
-
-/// Explicit benchmark, excluded from CI's normal correctness suite.
-/// Times the same lock helpers and tree operations used by Engine get/put,
-/// allowing lock acquisition to be measured without production instrumentation.
 #[test]
-#[ignore = "run in release mode with --ignored --nocapture"]
-fn contention_benchmark() {
-    let ops: usize = std::env::var("YOUDAHEDB_BENCH_OPS")
-        .unwrap_or_else(|_| "10000".into())
-        .parse()
-        .expect("positive operation count");
-    assert!(ops > 0);
-    println!("threads,read_pct,ops,ops_per_sec,latency_p50_us,latency_p95_us,latency_p99_us,wait_p50_us,wait_p95_us,wait_p99_us");
-    for read_pct in [100, 90] {
-        for threads in [1, 8, 16] {
-            let dir = TestDir::new();
-            let db = dir.open();
-            let value = "v".repeat(128);
-            for key in 0..256 {
-                db.put(&format!("k{key:03}"), &value).unwrap();
-            }
-            db.flush().unwrap();
-            let barrier = Arc::new(Barrier::new(threads + 1));
-            let handles: Vec<_> = (0..threads)
-                .map(|id| {
-                    let db = db.clone();
-                    let barrier = barrier.clone();
-                    let value = value.clone();
-                    thread::spawn(move || {
-                        let mut samples = Vec::new();
-                        barrier.wait();
-                        for i in (id..ops).step_by(threads) {
-                            let key = format!("k{:03}", i.wrapping_mul(73) % 256);
-                            let start = Instant::now();
-                            let wait;
-                            if i % 100 < read_pct {
-                                let guard = db.read().unwrap();
-                                wait = start.elapsed().as_nanos();
-                                assert_eq!(
-                                    guard.get(&key).unwrap().as_deref(),
-                                    Some(value.as_str())
-                                );
-                            } else {
-                                let mut guard = db.write().unwrap();
-                                wait = start.elapsed().as_nanos();
-                                guard.put(&key, &value).unwrap();
-                            }
-                            samples.push((start.elapsed().as_nanos(), wait));
-                        }
-                        samples
-                    })
-                })
-                .collect();
-            let start = Instant::now();
-            barrier.wait();
-            let samples: Vec<_> = handles
-                .into_iter()
-                .flat_map(|h| h.join().unwrap())
-                .collect();
-            let elapsed = start.elapsed().as_secs_f64();
-            let (mut latency, mut wait): (Vec<_>, Vec<_>) = samples.into_iter().unzip();
-            println!(
-                "{threads},{read_pct},{ops},{:.0},{:.3},{:.3},{:.3},{:.3},{:.3},{:.3}",
-                ops as f64 / elapsed,
-                percentile(&mut latency, 50) as f64 / 1000.0,
-                percentile(&mut latency, 95) as f64 / 1000.0,
-                percentile(&mut latency, 99) as f64 / 1000.0,
-                percentile(&mut wait, 50) as f64 / 1000.0,
-                percentile(&mut wait, 95) as f64 / 1000.0,
-                percentile(&mut wait, 99) as f64 / 1000.0
-            );
-        }
-    }
+fn directory_ownership_lasts_until_the_last_clone_is_dropped() {
+    let dir = TestDir::new();
+    let db = dir.open();
+    let clone = db.clone();
+    drop(db);
+    let error = Engine::open(dir.0.join(".").to_str().unwrap())
+        .err()
+        .unwrap();
+    assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+    clone.put("k", "v").unwrap();
+    drop(clone);
+    assert!(dir.0.join("LOCK").exists());
+    assert_eq!(dir.open().get("k").unwrap(), Some("v".into()));
+}
+
+#[test]
+fn failed_open_releases_directory_ownership() {
+    let dir = TestDir::new();
+    let corrupt_table = dir.0.join("sst-000000.sst");
+    fs::write(&corrupt_table, b"bad").unwrap();
+    assert_eq!(
+        Engine::open(dir.0.to_str().unwrap()).err().unwrap().kind(),
+        io::ErrorKind::InvalidData
+    );
+    fs::remove_file(corrupt_table).unwrap();
+    let db = dir.open();
+    db.put("k", "v").unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_does_not_bypass_directory_ownership() {
+    let dir = TestDir::new();
+    let aliases = TestDir::new();
+    let db = dir.open();
+    let alias = aliases.0.join("alias");
+    std::os::unix::fs::symlink(&dir.0, &alias).unwrap();
+    let error = Engine::open(alias.to_str().unwrap()).err().unwrap();
+    assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+    db.put("k", "v").unwrap();
 }
