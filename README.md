@@ -310,7 +310,8 @@ Rust's default `HashMap` hasher is seeded per process. A Bloom filter written to
 
 ## Beyond the storage engine
 
-Designed in the [engineering report](https://youdahe123.github.io/pdf/project1_distributed_database.pdf), not yet implemented.
+Designed in the [engineering report](https://youdahe123.github.io/pdf/project1_distributed_database.pdf).
+The consistent hash ring is implemented; the remaining layers below are planned.
 
 ### Consensus — Raft, one group per shard
 
@@ -343,6 +344,11 @@ The router keeps a live map of shard locations and measured round-trip times:
 | **Causal** | any follower caught up to the required HLC timestamp | reads reflect all causally preceding writes |
 
 ### Sharding & multi-region replication
+
+The library now exposes `HashRing` for deterministic key-to-node ownership,
+with configurable virtual positions (256 per node by default). See the
+[API, placement contract, and distribution measurements](docs/hash-ring.md).
+Request routing, replication, and data migration remain future work.
 
 Consistent hashing with 256 virtual nodes per physical node, so a node joining or leaving remaps only a proportional fraction of keys rather than reshuffling the entire keyspace. Each shard replicates across a configurable number of regions (default 3) under placement constraints — for example, at least one replica each in US-East, US-West and EU-West.
 
