@@ -1,0 +1,12 @@
+{
+  // Static site deploy. There is no Worker script — `assets.directory` is the
+  // whole thing, so Cloudflare just serves web/ straight from its edge.
+  "name": "youdahedb",
+  "compatibility_date": "2026-09-17",
+  "assets": {
+    "directory": "./web",
+    // serves /media for web/media.html, and web/index.html at /
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}
