@@ -1,0 +1,8 @@
+# There are no Rust dependencies by design, but the CI workflow pins third-party
+# GitHub Actions — those do get advisories, and a compromised action runs in CI.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
