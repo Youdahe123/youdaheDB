@@ -17,6 +17,7 @@
 //! ```
 
 mod engine;
+mod hash_ring;
 mod lsm;
 mod memtable;
 mod merge;
@@ -24,3 +25,4 @@ mod sstable;
 mod wal;
 
 pub use engine::{Engine, Scan};
+pub use hash_ring::{HashRing, RingError};
