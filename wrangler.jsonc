@@ -5,8 +5,11 @@
   "compatibility_date": "2026-09-17",
   "assets": {
     "directory": "./web",
-    // serves /media for web/media.html, and web/index.html at /
-    "html_handling": "auto-trailing-slash",
+    // Serve files at their real paths. Every internal link in the site is
+    // written as "docs.html", so the alternative (auto-trailing-slash) made
+    // each one a 307 redirect to the extensionless URL — an extra round trip
+    // on every click. "none" makes them all direct 200s.
+    "html_handling": "none",
     "not_found_handling": "404-page"
   }
 }
