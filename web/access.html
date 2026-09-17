@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+<style>
+.gwrap{max-width:430px;margin:0 auto;padding:70px 0 90px}
+.gcard{border:1px solid var(--line)}
+.gtop{padding:28px 28px 24px;border-bottom:1px solid var(--line-soft)}
+.gtop h1{font-size:25px;margin-bottom:10px;letter-spacing:-.02em}
+.gtop p{color:var(--t2);font-size:13.5px;line-height:1.65;margin:0}
+.gbody{padding:24px 28px 26px}
+.glabel{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--t3);margin-bottom:9px}
+.ginput{width:100%;padding:12px 14px;border:1px solid var(--line);background:var(--bg);
+  font-family:var(--mono);font-size:13px;color:var(--t0);letter-spacing:.04em}
+.ginput::placeholder{color:var(--t4);letter-spacing:0}
+.ginput:focus{border-color:var(--t4)}
+.ginput:disabled{opacity:.5}
+.gbtn{width:100%;margin-top:12px;justify-content:center;padding:11px 15px}
+.gbtn:disabled{opacity:.45;cursor:default}
+.gerr{margin-top:11px;font-family:var(--mono);font-size:11.5px;color:var(--st-crit);
+  min-height:16px;line-height:1.5}
+.gok{color:var(--st-good)}
+.gsep{display:flex;align-items:center;gap:13px;padding:22px 28px;
+  border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+.gsep::before,.gsep::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+.gsep span{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--t4)}
+.gwait{padding:24px 28px 28px}
+.gwait h2{font-size:16px;margin-bottom:8px}
+.gwait p{color:var(--t2);font-size:13px;line-height:1.65;margin:0 0 15px}
+.gnote{margin-top:22px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--t4)}
+.gnote a{color:var(--t3);border-bottom:1px solid var(--t4)}
+.gnote a:hover{color:var(--t0)}
+.ghide{display:none}
+</style>
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap">
+  <div class="gwrap">
+
+    <div class="gcard">
+      <div class="gtop">
+        <h1>Sign in to the sandbox</h1>
+        <p>The sandbox is a live youdaheDB you can write to from your browser. Access is invite-only
+          while we scale it up — enter your passcode below.</p>
+      </div>
+
+      <div class="gbody">
+        <form id="gform" autocomplete="off">
+          <label class="glabel" for="gcode">Passcode</label>
+          <input class="ginput" id="gcode" placeholder="YDB-XXXX-0000" autocomplete="off"
+                 spellcheck="false" autocapitalize="characters">
+          <button class="btn primary gbtn" type="submit">Continue</button>
+          <div class="gerr" id="gerr"></div>
+        </form>
+      </div>
+
+      <div class="gsep"><span>or</span></div>
+
+      <div class="gwait">
+        <h2>Don't have a passcode?</h2>
+        <p>Join the waitlist and we'll send you one as sandbox capacity opens up.</p>
+        <button class="btn gbtn" id="gjoin" type="button">Join the waitlist</button>
+
+        <form id="gwform" class="ghide" autocomplete="off">
+          <label class="glabel" for="gemail" style="margin-top:16px">Email</label>
+          <input class="ginput" id="gemail" type="email" placeholder="you@example.com"
+                 autocomplete="email" required>
+          <div class="hp" aria-hidden="true">
+            <label>Company<input id="gcompany" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <button class="btn primary gbtn" type="submit" id="gwbtn">Request access</button>
+          <div class="gerr" id="gwerr"></div>
+        </form>
+      </div>
+    </div>
+
+    <p class="gnote">The <a href="docs.html">documentation</a> is open to everyone — no passcode needed.</p>
+
+  </div>
+</main>
+
+<script src="gate.js"></script>
+<script src="config.js"></script>
+<script src="waitlist.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var params = new URLSearchParams(location.search);
+  var next = params.get('next') || 'console.html';
+  /* only ever redirect to a page on this site */
+  if (!/^[a-zA-Z0-9._-]+\.html([?#].*)?$/.test(next)) next = 'console.html';
+
+  if (YDBGate.unlocked()) location.replace(next);
+
+  var form = document.getElementById('gform');
+  var code = document.getElementById('gcode');
+  var err  = document.getElementById('gerr');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = code.value.trim();
+    if (!v) { err.className = 'gerr'; err.textContent = 'Enter your passcode.'; return; }
+    if (YDBGate.check(v)) {
+      err.className = 'gerr gok';
+      err.textContent = 'Passcode accepted — opening the sandbox…';
+      YDBGate.unlock();
+      setTimeout(function () { location.href = next; }, 550);
+    } else {
+      err.className = 'gerr';
+      err.textContent = "That passcode isn't recognised.";
+      code.select();
+    }
+  });
+
+  document.getElementById('gjoin').addEventListener('click', function () {
+    this.classList.add('ghide');
+    document.getElementById('gwform').classList.remove('ghide');
+    document.getElementById('gemail').focus();
+  });
+
+  document.getElementById('gwform').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var werr  = document.getElementById('gwerr');
+    var btn   = document.getElementById('gwbtn');
+    var input = document.getElementById('gemail');
+
+    /* honeypot — only a bot fills a field it cannot see */
+    if (document.getElementById('gcompany').value) {
+      werr.className = 'gerr gok';
+      werr.textContent = "You're on the list.";
+      return;
+    }
+
+    btn.disabled = true;
+    werr.className = 'gerr';
+    werr.textContent = 'Sending…';
+
+    var r = await YDBWaitlist.join(input.value, 'sandbox-gate');
+    btn.disabled = false;
+
+    if (r.status === 'ok') {
+      werr.className = 'gerr gok';
+      werr.textContent = "You're on the list. We'll email a passcode when a slot opens.";
+      input.disabled = true; btn.disabled = true;
+    } else if (r.status === 'invalid') {
+      werr.textContent = 'That email address does not look right.';
+      input.select();
+    } else if (r.status === 'unconfigured') {
+      werr.textContent = 'Waitlist is not configured yet — fill in config.js.';
+    } else if (r.status === 'network') {
+      werr.textContent = "Couldn't reach the waitlist. Check your connection and try again.";
+    } else {
+      werr.textContent = 'Something went wrong (' + r.code + '). Please try again.';
+      console.error('[waitlist]', r.code, r.detail);
+    }
+  });
+})();
+</script>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

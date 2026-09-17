@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starting with an empty Cargo.toml — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html" class="on">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap"><article class="article">
+  <a class="back" href="media.html">← All writing</a>
+  <div class="pmeta">Feb 14, 2026 · note</div>
+  <h1>Starting with an empty Cargo.toml</h1>
+  <p class="stand">One rule for the whole project — no crates, in the database or in its tests. It is not asceticism. It is the only way I know to actually learn this.</p>
+
+<p>The first commit is an empty binary and a <code>Cargo.toml</code> with nothing under
+<code>[dependencies]</code>. That stays true for everything after it.</p>
+
+<p>The reason is simple. If I pull in a crate for the on-disk format, I will learn the crate's API
+and nothing about the format. Every interesting decision in a storage engine — how a record is
+framed, when a write is safe to acknowledge, what a delete even <i>is</i> — is exactly the decision
+a good library makes for you and then hides. Hiding it is the right call in production and the
+wrong call here.</p>
+
+<h2>What it costs</h2>
+
+<p>Plenty. No <code>serde</code>, so records get framed by hand with length prefixes. No
+<code>crc32fast</code>, so checksums are a thing I will have to write. No async runtime, so
+concurrency is threads and locks from the standard library. Some of this is slower than the crate
+would be, and some of it I will get wrong at least once before I get it right.</p>
+
+<p>That is the point. The bugs are the curriculum. A durability bug you introduced yourself and then
+had to reason your way out of teaches you more about <code>fsync</code> than any amount of reading
+the man page.</p>
+
+<h2>What it buys</h2>
+
+<p>Every byte on disk is a byte I chose to put there, and I can explain why. When something breaks
+there is no layer I cannot open. And the whole thing builds with <code>cargo build</code> on a
+clean machine with no network — which turns out to be a genuinely nice property for a database.</p>
+
+<p>The plan is bottom-up and strictly ordered: log, then memtable, then on-disk tables, then the
+thing that ties them together. Nothing gets started before the layer under it works end to end.</p>
+  <div class="end"><a href="post-write-ahead-log.html">Next: The write-ahead log, byte by byte →</a></div>
+</article></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
