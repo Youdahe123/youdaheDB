@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Writing an SSTable — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html" class="on">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap"><article class="article">
+  <a class="back" href="media.html">← All writing</a>
+  <div class="pmeta">Sep 3, 2026 · engineering</div>
+  <h1>Writing an SSTable</h1>
+  <p class="stand">The memtable fills up and has to go somewhere. That somewhere is a file written exactly once and never modified again — and the trick to reading it is the last eight bytes.</p>
+
+<p>A full memtable gets written to disk as a <b>sorted string table</b>: one file, written once,
+never modified. Not updated in place, not appended to. Immutability is what makes the rest of the
+design tractable — a file that never changes can be read without locks and deleted without
+coordination.</p>
+
+<p>Because the memtable is a <code>BTreeMap</code>, its iterator already comes out in key order, so
+writing the file is a linear walk with no sort step.</p>
+
+<h2>The layout</h2>
+
+<div class="code"><div class="bar"><span>file layout</span></div><pre>[entry][entry][entry]...     &lt;- the data, in key order
+[index entry][index entry]...&lt;- key -&gt; byte offset of its entry
+[index_offset: u64]          &lt;- 8 bytes, where the index begins</pre></div>
+
+<p>Entries are framed like log records — length-prefixed key, length-prefixed value, with the same
+tombstone marker standing in for the value length when the entry is a delete.</p>
+
+<p>Then the index: every key again, paired with the byte offset where its entry lives. Then, right
+at the end of the file, a single <code>u64</code> saying where that index started.</p>
+
+<h2>Why the offset goes last</h2>
+
+<p>You cannot put it first. The index lives after the data, and you do not know how long the data
+is until you have written all of it. Writing a header would mean either buffering the whole file in
+memory or seeking back to patch the header afterwards — and a seek-back-and-patch is precisely the
+kind of partial write that leaves a corrupt file behind after a crash.</p>
+
+<p>So it goes at the end, where it can be written once, in order, forward-only. To read the file you
+seek to eight bytes from the end, read the offset, jump there, and load the index.</p>
+
+<h2>The index is in memory, the data is not</h2>
+
+<p><code>open()</code> reads the index into a <code>Vec&lt;(String, u64)&gt;</code> and stops. The
+entries stay on disk. A <code>get</code> is then a lookup in the in-memory index followed by one
+seek and one read for the value — rather than a scan of the file.</p>
+
+<p>That is fine at this size and will not stay fine. Every key of every table in RAM does not scale,
+which is what a <b>sparse</b> index fixes: keep every Nth key, binary search to the nearest one, scan
+a short block from there. Same idea, bounded memory. That is a later problem.</p>
+
+<p>The file is <code>sync_all()</code>ed before <code>flush_from_memtable</code> returns. An SSTable
+that is not durable is not worth clearing the log for.</p>
+  <div class="end"><a href="post-flush-is-not-fsync.html">← Previous: flush() is not fsync()</a><br><a href="post-one-database.html">Next: Making the layers behave like one database →</a></div>
+</article></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

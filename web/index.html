@@ -2,12 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>youdaheDB — a distributed SQL database</title>
 <meta name="description" content="A distributed SQL database with an LSM storage engine, Raft replication and the PostgreSQL wire protocol. Written from scratch in Rust with zero dependencies.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
 <link rel="stylesheet" href="app.css">
 <style>
 .hero{padding:70px 0 34px;text-align:center;max-width:840px;margin:0 auto}
@@ -20,14 +35,14 @@
 
 /* ── engine demo ── */
 .engine{border:1px solid var(--line);margin:14px 0 0;background:
-  radial-gradient(ellipse at 50% 45%, rgba(57,135,229,.05), transparent 66%), #000}
+radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--cat-1) 7%, transparent), transparent 66%), var(--bg)}
 .eng-bar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
 .eng-bar .label{margin-right:6px}
 .op{padding:6px 14px;border:1px solid var(--line);font-family:var(--mono);font-size:11.5px;
   color:var(--t2);cursor:pointer;transition:.13s}
 .op:hover:not(:disabled){color:var(--t0);background:var(--fill);border-color:var(--t4)}
 .op:disabled{opacity:.34;cursor:default}
-.op.on{color:#000;background:var(--t1);border-color:var(--t1)}
+.op.on{color:var(--t0);background:var(--t1);border-color:var(--t1)}
 .eng-bar .hint{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--t4)}
 
 .eng-body{display:grid;grid-template-columns:minmax(0,1fr) 268px}
@@ -62,6 +77,36 @@
 .claim .t{color:var(--t2);font-size:13.5px}
 .claim .t b{color:var(--t1);font-weight:500}
 
+
+/* ── as seen in ── */
+.seen{display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+  border:1px solid var(--line);border-left:2px solid var(--cat-1);
+  background:linear-gradient(90deg, color-mix(in srgb, var(--cat-1) 9%, transparent), var(--fill) 46%, var(--fill));
+  padding:16px 22px;margin:6px 0 0}
+.seen .tag{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--cat-1);white-space:nowrap;border-right:1px solid var(--line);padding-right:20px}
+.seen .pub{font-size:17px;color:var(--t0);letter-spacing:-.02em;white-space:nowrap}
+.seen .pub small{display:block;font-family:var(--mono);font-size:10px;color:var(--t4);
+  letter-spacing:.08em;margin-top:3px}
+.seen .art{color:var(--t2);font-size:13.5px;flex:1;min-width:220px;line-height:1.45}
+.seen .art b{color:var(--t1);font-weight:500}
+.seen .btn{white-space:nowrap;padding:10px 18px}
+@media (max-width:820px){
+  .seen{gap:14px;padding:15px 17px}
+  .seen .tag{border-right:0;padding-right:0;width:100%}
+  .seen .btn{width:100%;justify-content:center}
+}
+
+/* ── built in public ── */
+a.cell{display:block;transition:background .13s}
+a.cell:hover{background:var(--fill)}
+a.cell .src{font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--t4)}
+a.cell h3{margin:10px 0 7px;color:var(--t1);font-size:15px}
+a.cell p{color:var(--t2);font-size:13px;margin:0}
+a.cell .go{display:block;margin-top:13px;font-family:var(--mono);font-size:11px;color:var(--t3)}
+a.cell:hover .go{color:var(--t0)}
+
 @media (max-width:900px){
   .hero{padding:44px 0 24px}
   .hero h1{font-size:34px}
@@ -69,53 +114,159 @@
   .trace{border-left:0;border-top:1px solid var(--line-soft);height:210px}
   .eng-canvas{height:320px}
 }
+
+/* ── AI-native serving path ──────────────────────────────── */
+.ai-intro .notice{margin-top:18px}
+.ai-intro .ext{color:var(--t1);border-bottom:1px solid var(--t4)}
+.serving{border-bottom:1px solid var(--line-soft)}
+.serving .eng-canvas{height:430px}
+.serving .trace{height:430px}
+
+/* ── retrieval playground ────────────────────────────────── */
+.vbox{margin-top:22px;border:1px solid var(--line)}
+.vbar{display:flex;gap:0;border-bottom:1px solid var(--line-soft)}
+.vbar input{flex:1;padding:14px 16px;font-family:var(--mono);font-size:13px;color:var(--t0)}
+.vbar input::placeholder{color:var(--t4)}
+.vbar select{padding:0 14px;font-family:var(--mono);font-size:11.5px;color:var(--t2);
+  border-left:1px solid var(--line-soft);cursor:pointer}
+.vchips{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:11px 14px;
+  border-bottom:1px solid var(--line-soft)}
+.vchips .label{margin-right:3px}
+.vchip{padding:4px 11px;border:1px solid var(--line);font-family:var(--mono);font-size:11px;
+  color:var(--t2);cursor:pointer;transition:.13s}
+.vchip:hover{color:var(--t0);background:var(--fill);border-color:var(--t4)}
+.vgrid{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr)}
+.vleft{padding:15px 16px;border-right:1px solid var(--line-soft)}
+.vright{padding:15px 16px}
+.vstrip{display:flex;align-items:center;gap:1px;height:46px;margin:11px 0 8px}
+.vstrip i{flex:1;height:100%;background:var(--cat-1);display:block}
+.vmeta{font-size:10.5px;color:var(--t4);letter-spacing:.06em}
+.vwarn{margin-top:14px;padding-top:13px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.65;color:var(--t3)}
+.vwarn b{color:var(--t2);font-weight:500}
+.vhit{padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.vhit:last-child{border-bottom:0}
+.vh-top{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px}
+.vh-k{color:var(--t1)} .vh-s{color:var(--t3)}
+.vhit.best .vh-k{color:var(--st-good)} .vhit.best .vh-s{color:var(--st-good)}
+.vhit.none{opacity:.4}
+.vh-bar{height:2px;background:var(--track);margin:6px 0 7px}
+.vh-bar i{display:block;height:100%;background:var(--cat-1);transition:width .18s ease}
+.vhit.best .vh-bar i{background:var(--st-good)}
+.vh-t{font-size:12px;color:var(--t2);line-height:1.55}
+
+/* ── workload model ──────────────────────────────────────── */
+.mbox{margin-top:22px;border:1px solid var(--line)}
+.mctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  border-bottom:1px solid var(--line-soft)}
+.mctl label{display:block;padding:13px 16px;border-right:1px solid var(--line-soft)}
+.mctl label span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--t3)}
+.mctl label b{display:block;font-family:var(--mono);font-size:17px;color:var(--t0);
+  font-weight:400;margin:5px 0 9px;letter-spacing:-.01em}
+.mctl input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:2px;
+  background:var(--track);cursor:pointer}
+.mctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--t0);border-radius:50%;cursor:pointer}
+.mctl input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--t0);
+  border:0;border-radius:50%;cursor:pointer}
+.mout .grid{border-top:0;border-left:0}
+.mgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mout .cell{border-right:1px solid var(--line-soft)}
+.mout .cell::after{content:none}
+.mbar{display:flex;align-items:center;gap:13px;padding:13px 16px}
+.mtrack{flex:1;height:3px;background:var(--track)}
+.mtrack i{display:block;height:100%;background:var(--st-good);transition:width .18s ease}
+.mbar .mono{font-size:11px;color:var(--t3);white-space:nowrap}
+
+@media (max-width:840px){
+  .vgrid{grid-template-columns:1fr}
+  .vleft{border-right:0;border-bottom:1px solid var(--line-soft)}
+  .serving .eng-canvas{height:340px}
+  .serving .trace{height:220px}
+}
 </style>
 </head>
 <body>
 
 <header class="topnav"><div class="in">
-  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
   <nav>
     <a href="index.html" class="on">Overview</a>
-    <a href="start.html">Get started</a>
+    <a href="access.html?next=start.html">Get started</a>
     <a href="docs.html">Docs</a>
-    <a href="console.html">Console</a>
+    <a href="media.html">Media</a>
+    <a href="access.html?next=console.html">Console</a>
   </nav>
   <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
     <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
-    <a class="btn primary" href="start.html">Get started</a>
+    <a class="btn primary" href="access.html?next=start.html">Get started</a>
   </div>
 </div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
 
 <main class="wrap">
 
   <section class="hero">
     <h1>The database that shows<br><em>you its work.</em></h1>
-    <p class="lede">A distributed SQL database with an LSM storage engine, Raft replication and the
-      PostgreSQL wire protocol — written from scratch in Rust, with zero dependencies.</p>
+    <p class="lede plain">A database built from scratch in Rust. Every diagram on this page is
+      live — click one and watch your data actually move through it.</p>
     <div class="cta">
-      <a class="btn primary" href="start.html">Get started</a>
-      <a class="btn" href="console.html">Open the console</a>
+      <a class="btn primary" href="access.html?next=start.html">Get started</a>
+      <a class="btn" href="access.html?next=console.html">Open the console</a>
       <a class="btn" href="docs.html">Docs</a>
     </div>
   </section>
 
+
+  <!-- ── as seen in ── -->
   <!-- ── interactive engine ── -->
+  <section class="sec intro-sec">
+    <div class="kicker">Saving and finding data</div>
+    <h2>What happens when you save something</h2>
+    <p class="lede plain">Before a save counts as done, it is written down somewhere safe. So if the
+      power goes out one second later, nothing is lost.</p>
+    <p class="cue">Press an action below and watch the path it takes.</p>
+  </section>
+
   <section class="engine">
     <div class="eng-bar">
-      <span class="label">Run an operation</span>
-      <button class="op" data-op="write">write</button>
-      <button class="op" data-op="read_hit">read · memtable hit</button>
-      <button class="op" data-op="read_disk">read · from disk</button>
-      <button class="op" data-op="flush">flush</button>
-      <button class="op" data-op="compact">compact</button>
-      <span class="hint" id="hint">click an operation to trace it through the engine</span>
+      <span class="label">Try an action</span>
+      <button class="op" data-op="write">save something</button>
+      <button class="op" data-op="read_hit">find it in memory</button>
+      <button class="op" data-op="read_disk">find it on disk</button>
+      <button class="op" data-op="flush">free up memory</button>
+      <button class="op" data-op="compact">tidy up old files</button>
+      <span class="hint" id="hint">pick one and watch it run</span>
     </div>
     <div class="eng-body">
       <div class="eng-canvas"><canvas id="cv"></canvas></div>
       <aside class="trace">
         <div class="label">Path taken</div>
-        <div id="steps"><div class="tr-empty">Idle.<br>Pick an operation above and watch it move through the engine.</div></div>
+        <div id="steps"><div class="tr-empty">Nothing running.<br>Pick an action above, or hover a circle to see what it is.</div></div>
         <div class="tr-foot" id="foot"></div>
       </aside>
     </div>
@@ -123,39 +274,195 @@
 
   <!-- ── what it is ── -->
   <section class="sec">
-    <div class="kicker">Storage engine</div>
-    <h2>Sequential writes. Sorted reads. Nothing thrown away.</h2>
-    <p class="lede">Every write is a sequential append to a log that is <b>fsync</b>ed before it is
-      acknowledged. Reads walk the memtable and then immutable sorted files, newest first, skipping
-      whole files with bloom filters before touching the disk.</p>
     <div class="grid g3 feat">
-      <div class="cell"><div class="n">01</div><h3>Durable by default</h3>
-        <p>An acknowledged write is on disk. Kill the process with <code>SIGKILL</code>, restart, and
-           the log replays everything back.</p></div>
-      <div class="cell"><div class="n">02</div><h3>Immutable on disk</h3>
-        <p>SSTables are written once and never modified. Compaction merges them and drops what is
-           dead, writing to a temp file and renaming into place.</p></div>
-      <div class="cell"><div class="n">03</div><h3>Reads that skip work</h3>
-        <p>A bloom filter answers "definitely not here" in constant time with no disk I/O, so a miss
-           costs one memory probe instead of a seek.</p></div>
-      <div class="cell"><div class="n">04</div><h3>Replicated with Raft</h3>
-        <p>Each range is its own Raft group of three replicas. Lose a node and the cluster keeps
-           serving as long as a quorum survives.</p></div>
-      <div class="cell"><div class="n">05</div><h3>Sharded by key range</h3>
-        <p>Consistent hashing with virtual nodes, a key-range router, and ranges that split and merge
-           as they grow.</p></div>
-      <div class="cell"><div class="n">06</div><h3>Speaks Postgres</h3>
-        <p>The PostgreSQL wire protocol, so <code>psql</code>, JDBC, psycopg and every ORM connect
-           without changing a line.</p></div>
+      <div class="cell"><div class="n">01</div><h3>Nothing gets lost</h3>
+        <p>Kill it mid-write and restart. Everything you saved comes back, because it was written to
+           disk before you were told it succeeded.</p></div>
+      <div class="cell"><div class="n">02</div><h3>Files are never edited</h3>
+        <p>Once a file is written it is never changed again. Cleaning up means merging old files
+           into a new one and swapping it in.</p></div>
+      <div class="cell"><div class="n">03</div><h3>It avoids pointless work</h3>
+        <p>Before reading a file it asks a tiny in-memory check that can say "definitely not in
+           here" — so looking for something that isn't there is nearly free.</p></div>
+      <div class="cell"><div class="n">04</div><h3>It survives a dead machine</h3>
+        <p>Every slice of your data lives on three machines. Lose one and the others keep answering
+           without anyone noticing.</p></div>
+      <div class="cell"><div class="n">05</div><h3>It grows on its own</h3>
+        <p>Data is split into chunks spread across machines. As a chunk fills up it splits in two,
+           with nothing to rewrite and no downtime.</p></div>
+      <div class="cell"><div class="n">06</div><h3>It works with tools you have</h3>
+        <p>It speaks Postgres, so <code>psql</code>, your ORM and your existing app connect without
+           changing a line of code.</p></div>
+    </div>
+    <details class="more"><summary>The technical version</summary><div class="more-in">
+      <p>Every write is a sequential append to a <b>write-ahead log</b> that is <b>fsync</b>ed before
+        it is acknowledged, then inserted into a sorted in-memory <b>memtable</b>. A full memtable is
+        flushed to an immutable <b>SSTable</b>; <b>compaction</b> merges those runs, keeps the newest
+        version of each key and drops tombstones, writing to a temp file and renaming into place.</p>
+      <p>Reads check the memtable first, then SSTables newest-first, consulting a <b>bloom filter</b>
+        per file to skip whole files without a disk seek. Each key range is its own <b>Raft</b> group
+        of three replicas, placed by <b>consistent hashing with virtual nodes</b>, and ranges split
+        and merge as they grow. The client protocol is the <b>PostgreSQL wire protocol</b>.</p>
+    </div></details>
+  </section>
+
+
+  <!-- ── AI-native serving path · DESIGN, NOT BUILT ── -->
+  <section class="sec ai-intro">
+    <div class="kicker">AI search</div>
+    <h2>Making it work for AI search</h2>
+    <p class="lede plain">An AI assistant doesn't ask for one row. It asks for a hundred paragraphs
+      at once, and it wants them in milliseconds. That changes what the database should be good at.</p>
+    <details class="more"><summary>The technical version</summary><div class="more-in">
+      <p>A search stack for a language model stores different things than one built for a human
+        reader: not pages, but <b>passages and the vectors computed from them</b>. The read is a
+        <b>batch</b> — give me these hundred keys, now — and the write is a <b>bulk republish</b>
+        whenever a chunker or an embedding model changes.</p>
+      <p>The design splits those two jobs apart, the way Perplexity describes for
+        <a class="ext" href="https://www.perplexity.ai/hub/blog/cobbledb-rebuilding-ai-search-storage-for-lower-latency-and-cost" target="_blank" rel="noopener">CobbleDB</a>:
+        durable document state on cheap disk, batched partition-aligned delivery in between, and a
+        hot store tuned for one operation — fetch these keys, fast.</p>
+    </div></details>
+  </section>
+
+  <section class="serving">
+    <div class="eng-bar srv-bar">
+      <span class="label">Watch a search</span>
+      <button class="op" data-op="batch_read">fetch many at once</button>
+      <button class="op" data-op="hedge">when a server is slow</button>
+      <button class="op" data-op="vector">find similar meaning</button>
+      <button class="op" data-op="ingest">add new pages</button>
+      <button class="op" data-op="reindex">change the AI model</button>
+      <span class="hint" id="hint2">pick one and watch it run</span>
+    </div>
+    <div class="eng-body">
+      <div class="eng-canvas"><canvas id="cv2"></canvas></div>
+      <aside class="trace">
+        <div class="label">Path taken</div>
+        <div id="steps2"><div class="tr-empty">Nothing running.<br>Pick an action above, or hover a circle to see what it is.</div></div>
+        <div class="tr-foot" id="foot2"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="kicker">The reasoning</div>
+    <h2>Why split it into pieces</h2>
+    <p class="lede plain">Adding data and searching data want opposite things. Keeping them apart is
+      the whole trick.</p>
+    <div class="grid g2 feat">
+      <div class="cell"><div class="n">01</div><h3>Updating shouldn't slow down searching</h3>
+        <p>If a huge update writes straight into the thing answering searches, searches get slow. So updates
+           go into a queue, and the search side picks them up when it has room.</p></div>
+      <div class="cell"><div class="n">02</div><h3>Swap the AI model without downtime</h3>
+        <p>Old and new versions sit side by side instead of overwriting. Switching is just pointing at the
+           new one — and undoing it is pointing back.</p></div>
+      <div class="cell"><div class="n">03</div><h3>Leave out what you don't need</h3>
+        <p>A search result showing up a second late is fine; it doesn't need a bank's guarantees. Skipping
+           the features it never uses is exactly what makes it fast.</p></div>
+      <div class="cell"><div class="n">04</div><h3>Only pay for the fast storage you use</h3>
+        <p>Everything is kept on cheap disk. Only the part people actually search gets copied onto the
+           expensive fast storage.</p></div>
+    </div>
+  </section>
+
+  <!-- ── retrieval playground ── -->
+  <section class="sec">
+    <div class="kicker">Try it</div>
+    <h2>How search actually finds things</h2>
+    <p class="lede plain">Type a question below. The page turns your words into numbers, compares
+      them against a handful of sentences, and puts the closest ones on top. That's the whole idea
+      behind search.</p>
+
+    <div class="vbox">
+      <div class="vbar">
+        <input id="vq" placeholder="what happens after a crash?" autocomplete="off" spellcheck="false" value="what happens after a crash?">
+        <select id="vk" aria-label="how many results">
+          <option value="3">top 3</option><option value="5" selected>top 5</option><option value="8">top 8</option>
+        </select>
+      </div>
+      <div class="vchips">
+        <span class="label">try</span>
+        <button class="vchip" data-q="what happens after a crash?">crash recovery</button>
+        <button class="vchip" data-q="skip files without reading the disk">skip the disk</button>
+        <button class="vchip" data-q="nearest vectors to a query embedding">vector search</button>
+        <button class="vchip" data-q="merging files and dropping tombstones">compaction</button>
+        <button class="vchip" data-q="connect with psql and an ORM">postgres</button>
+      </div>
+      <div class="vgrid">
+        <div class="vleft">
+          <div class="label">Query vector</div>
+          <div class="vstrip" id="vstrip"></div>
+          <div class="vmeta mono" id="vmeta"></div>
+          <div class="vwarn">This toy matches <b>spelling, not meaning</b>. It finds
+            <code>crashes</code> when you type <code>crash</code>, but has no idea that
+            <code>durable</code> and <code>fsync</code> are related. A real AI model is the piece
+            that understands meaning — everything around it works exactly like this.
+            <details class="more tight"><summary>What it's really doing</summary><div class="more-in">
+              <p>Words and character trigrams are <b>signed-hashed</b> into 64 dimensions and
+                L2-normalised, then scored by <b>cosine similarity</b> — the same subword trick
+                fastText uses, minus the learned weights. Swapping in a trained embedding model
+                changes this one function and nothing else.</p>
+            </div></details></div>
+        </div>
+        <div class="vright">
+          <div class="label">Ranked passages</div>
+          <div id="vhits"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── workload model ── -->
+  <section class="sec">
+    <div class="kicker">Cost</div>
+    <h2>What all this would cost to run</h2>
+    <p class="lede plain">Drag the sliders to describe how much data you have and how busy you are.
+      These are <b>sums based on your numbers, not measurements</b> — nothing here has been
+      benchmarked yet.</p>
+
+    <div class="mbox" id="model">
+      <div class="mctl">
+        <label><span>Corpus</span><b id="m-docs-v"></b>
+          <input type="range" id="m-docs" min="1" max="2000" value="250" step="1"></label>
+        <label><span>Record size</span><b id="m-val-v"></b>
+          <input type="range" id="m-val" min="1" max="200" value="50" step="1"></label>
+        <label><span>Keys per query</span><b id="m-keys-v"></b>
+          <input type="range" id="m-keys" min="1" max="200" value="20" step="1"></label>
+        <label><span>Query rate</span><b id="m-qps-v"></b>
+          <input type="range" id="m-qps" min="1" max="500" value="200" step="1"></label>
+        <label><span>Cache hit rate</span><b id="m-hit-v"></b>
+          <input type="range" id="m-hit" min="0" max="100" value="85" step="1"></label>
+      </div>
+      <div class="mout">
+        <div class="grid g3 mgrid">
+          <div class="cell"><div class="n">CORPUS ON DISK</div><div class="v" id="o-corpus"></div>
+            <p>every record, cheap tier</p></div>
+          <div class="cell"><div class="n">BYTES PER QUERY</div><div class="v" id="o-query"></div>
+            <p>keys × record size</p></div>
+          <div class="cell"><div class="n">READ THROUGHPUT</div><div class="v" id="o-bw"></div>
+            <p>what the fleet must serve</p></div>
+          <div class="cell"><div class="n">FROM DISK</div><div class="v" id="o-disk"></div>
+            <p>the part cache does not absorb</p></div>
+          <div class="cell"><div class="n">RAM TO HOLD IT</div><div class="v" id="o-ram"></div>
+            <p>working set at that hit rate</p></div>
+          <div class="cell"><div class="n">ROUND TRIPS</div><div class="v" id="o-rt"></div>
+            <p>batched vs one get per key · <span id="o-saved"></span></p></div>
+        </div>
+        <div class="mbar"><span class="label">served from memory</span>
+          <div class="mtrack"><i id="o-bar"></i></div>
+          <span class="mono" id="o-hitpct"></span>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- ── interface ── -->
   <section class="sec">
-    <div class="kicker">Interfaces</div>
-    <h2>Connect the way you already do</h2>
-    <p class="lede">A <code>psql</code>-compatible shell, a scriptable CLI, an embeddable Rust library,
-      and a browser console for the whole cluster.</p>
+    <div class="kicker">Using it</div>
+    <h2>Connecting to it</h2>
+    <p class="lede plain">Four ways in: the shell you already use, a command line, a Rust library
+      you can drop into your own program, and a console right in the browser.</p>
     <div class="split">
       <div class="code">
         <div class="bar"><span>shell</span><span class="copy" data-copy="youdahedb -c &quot;select id, email from users limit 5&quot;">copy</span></div>
@@ -192,9 +499,14 @@ db.delete(<span class="s">"user:1"</span>)?;
   <!-- ── principles ── -->
   <section class="sec">
     <div class="kicker">How it is built</div>
-    <h2>No dependencies. None.</h2>
-    <p class="lede">Every B-tree, hash, file format, protocol parser and thread pool is written here.
-      <code>Cargo.toml</code> has an empty <code>[dependencies]</code> section and it stays that way.</p>
+    <h2>Written from scratch, on purpose</h2>
+    <p class="lede plain">No libraries. Not one. Every piece is hand-written here, because the point
+      is to understand how a database works — and you can't learn that from someone else's code.</p>
+    <details class="more"><summary>The technical version</summary><div class="more-in">
+      <p>Every B-tree, hash, file format, protocol parser and thread pool is implemented in this
+        repository. <code>Cargo.toml</code> has an empty <code>[dependencies]</code> section and it
+        stays that way.</p>
+    </div></details>
     <div>
       <div class="claim"><span class="v">0 crates</span>
         <span class="t">The Rust standard library and nothing else — in the database <b>and</b> its tests.</span></div>
@@ -207,13 +519,14 @@ db.delete(<span class="s">"user:1"</span>)?;
     </div>
   </section>
 
+
   <section class="sec" style="border-bottom:0;text-align:center;padding:56px 0 40px">
     <h2>Try it in the browser</h2>
     <p class="lede" style="margin:12px auto 24px">The console runs a full SQL shell, schema browser,
       cluster view and live storage internals — no install.</p>
     <div class="hero"><div class="cta" style="padding:0">
-      <a class="btn primary" href="console.html">Open the console</a>
-      <a class="btn" href="start.html">Install locally</a>
+      <a class="btn primary" href="access.html?next=console.html">Open the console</a>
+      <a class="btn" href="access.html?next=start.html">Install locally</a>
     </div></div>
   </section>
 
@@ -221,235 +534,17 @@ db.delete(<span class="s">"user:1"</span>)?;
 
 <footer class="foot"><div class="wrap in">
   <span class="mono">youdaheDB v0.1</span>
-  <span class="sep">/</span><a href="start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
   <span class="sep">/</span><a href="docs.html">Docs</a>
-  <span class="sep">/</span><a href="console.html">Console</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
   <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
-  <span style="margin-left:auto;color:var(--t4)" class="mono">storage engine in active development</span>
+  <span class="sep">/</span><a href="media.html">Writing</a>
 </div></footer>
 
-<script>
-"use strict";
-
-/* ══════════════════════════════════════════════════════════════
-   Interactive engine diagram.
-   Nodes are hand-placed in normalised coords so the layout is
-   deliberate rather than whatever a force sim settles into.
-   ══════════════════════════════════════════════════════════════ */
-const NODES = {
-  client:  { x:.07, y:.50, r:12, label:"client",   sub:"" },
-  wal:     { x:.29, y:.19, r:15, label:"WAL",      sub:"append-only" },
-  mem:     { x:.29, y:.62, r:18, label:"memtable", sub:"sorted, in RAM" },
-  bloom:   { x:.53, y:.62, r:13, label:"bloom",    sub:"skip filter" },
-  l0:      { x:.79, y:.16, r:14, label:"L0",       sub:"6 files", lv:0 },
-  l1:      { x:.79, y:.37, r:14, label:"L1",       sub:"3 files", lv:1 },
-  l2:      { x:.79, y:.58, r:14, label:"L2",       sub:"2 files", lv:2 },
-  l3:      { x:.79, y:.79, r:14, label:"L3",       sub:"1 file",  lv:3 },
-};
-const EDGES = [
-  ["client","wal"],["client","mem"],["wal","mem"],["mem","bloom"],
-  ["mem","l0"],["bloom","l0"],["bloom","l1"],["bloom","l2"],["bloom","l3"],
-  ["l0","l1"],["l1","l2"],["l2","l3"],
-];
-
-const C = { write:"var(--cat-1)", read:"var(--cat-3)", bg:"var(--cat-2)" };
-const HEX = { write:"#3987e5", read:"#199e70", bg:"#d95926" };
-
-/* Each op is a list of hops. `note` is a structural fact about the
-   engine — how many fsyncs, how many files touched — never a timing
-   claim, because none of this is measured yet. */
-const OPS = {
-  write: { kind:"write", title:"write", steps:[
-    { from:"client", to:"wal",  t:"append to WAL",       d:"record framed and written",         dur:620 },
-    { from:"wal",    to:"wal",  t:"fsync",               d:"blocks until the disk confirms",    dur:900, hold:true },
-    { from:"wal",    to:"mem",  t:"insert into memtable",d:"only after the log is durable",     dur:620 },
-    { from:"mem",    to:"client",t:"acknowledge",        d:"the write is now crash-safe",       dur:520, hit:true },
-  ], foot:"1 fsync · 1 sequential append · 0 random writes" },
-
-  read_hit: { kind:"read", title:"read · memtable hit", steps:[
-    { from:"client", to:"mem",   t:"probe memtable",  d:"newest layer is checked first", dur:600 },
-    { from:"mem",    to:"client",t:"Found → return",  d:"no disk touched at all",        dur:520, hit:true },
-  ], foot:"0 disk reads · 0 bloom checks" },
-
-  read_disk: { kind:"read", title:"read · from disk", steps:[
-    { from:"client", to:"mem",   t:"probe memtable",     d:"NotFound → keep going",              dur:520 },
-    { from:"mem",    to:"bloom", t:"consult bloom filters", d:"one probe per SSTable, in memory", dur:520 },
-    { from:"bloom",  to:"l0",    t:"L0 · definitely not", d:"skipped, no disk I/O",   dur:380, skip:true },
-    { from:"bloom",  to:"l1",    t:"L1 · definitely not", d:"skipped, no disk I/O",   dur:380, skip:true },
-    { from:"bloom",  to:"l2",    t:"L2 · maybe",          d:"read one block from disk",           dur:620 },
-    { from:"l2",     to:"client",t:"Found → return",      d:"exactly one block read",             dur:640, hit:true },
-  ], foot:"1 disk read · 3 files skipped · 4 bloom probes" },
-
-  flush: { kind:"bg", title:"flush", steps:[
-    { from:"mem", to:"l0",  t:"write memtable → new SSTable", d:"sorted, so it is a linear walk", dur:900 },
-    { from:"l0",  to:"l0",  t:"fsync the SSTable",            d:"durable before anything else",   dur:760, hold:true },
-    { from:"l0",  to:"wal", t:"clear the WAL",                d:"only now is this safe",          dur:640, hit:true },
-  ], foot:"memtable emptied · WAL truncated · 1 new L0 file" },
-
-  compact: { kind:"bg", title:"compact", steps:[
-    { from:"l0", to:"l1", t:"k-way merge L0 → L1", d:"newest version of each key wins",   dur:820 },
-    { from:"l1", to:"l2", t:"drop tombstones",     d:"safe once nothing older holds the key", dur:760 },
-    { from:"l2", to:"l3", t:"rename into place",   d:"a crash leaves the inputs intact",  dur:760, hit:true },
-  ], foot:"reads get faster · space reclaimed · inputs untouched until rename" },
-};
-
-const SPEED = 0.55;   // global tempo for the trace animation
-const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-const stepsEl = document.getElementById("steps"), footEl = document.getElementById("foot");
-const hintEl = document.getElementById("hint");
-let W=0, H=0, dpr = Math.min(devicePixelRatio||1, 2);
-let active = null;          // { op, stepIndex, progress }
-let visited = new Set(), pulsing = new Map(), running = false;
-
-function size(){
-  const b = cv.parentElement.getBoundingClientRect();
-  W = b.width; H = b.height;
-  cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
-}
-const px = n => ({ x: NODES[n].x*W, y: NODES[n].y*H });
-
-function draw(ts){
-  ctx.clearRect(0,0,W,H);
-  const col = active ? HEX[active.op.kind === "bg" ? "bg" : active.op.kind] : "#3987e5";
-
-  // edges
-  for (const [a,b] of EDGES){
-    const p = px(a), q = px(b);
-    const live = active && active.cur && (
-      (active.cur.from===a && active.cur.to===b) || (active.cur.from===b && active.cur.to===a));
-    ctx.strokeStyle = live ? col : "rgba(255,255,255,.085)";
-    ctx.lineWidth = live ? 1.6 : 1;
-    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
-  }
-
-  // an active hop with no static edge (a return, or a causal step) — dash it
-  if (active && active.cur && active.cur.from !== active.cur.to){
-    const {from,to} = active.cur;
-    const isEdge = EDGES.some(([x,y]) => (x===from&&y===to)||(x===to&&y===from));
-    if (!isEdge){
-      const p = px(from), q = px(to);
-      ctx.save(); ctx.setLineDash([4,5]);
-      ctx.strokeStyle = col; ctx.globalAlpha = .5; ctx.lineWidth = 1.3;
-      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  // pulse rings first, so they never wash over a label
-  for (const [id,n] of Object.entries(NODES)){
-    const pulse = pulsing.get(id); if (pulse === undefined) continue;
-    const g = Math.max(0, 1 - (ts - pulse)/900); if (g <= .05) continue;
-    const p = px(id);
-    ctx.strokeStyle = col; ctx.globalAlpha = g*.5; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(p.x, p.y, n.r + 8 + (1-g)*16, 0, 7); ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  // nodes
-  for (const [id,n] of Object.entries(NODES)){
-    const p = px(id);
-    const seen = visited.has(id);
-    const pulse = pulsing.get(id);
-    let glow = 0;
-    if (pulse !== undefined){
-      const age = ts - pulse;
-      glow = Math.max(0, 1 - age/900);
-      if (glow <= 0) pulsing.delete(id);
-    }
-    const base = n.lv !== undefined
-      ? getComputedStyle(document.documentElement).getPropertyValue(`--lv-${n.lv}`).trim()
-      : "rgba(255,255,255,.30)";
-
-    if (glow > 0){ ctx.shadowColor = col; ctx.shadowBlur = 6 + glow*26; }
-    ctx.fillStyle = glow > 0 ? col : (seen ? "rgba(255,255,255,.55)" : base);
-    ctx.beginPath(); ctx.arc(p.x, p.y, n.r + glow*3.5, 0, 7); ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.font = "500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-    ctx.fillStyle = glow > 0 ? "#fff" : (seen ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.55)");
-    ctx.fillText(n.label, p.x, p.y - n.r - 10);
-    if (n.sub){
-      ctx.font = "400 9.5px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillStyle = "rgba(255,255,255,.26)";
-      ctx.fillText(n.sub, p.x, p.y + n.r + 15);
-    }
-  }
-
-  // the travelling packet
-  if (active && active.cur && active.cur.from !== active.cur.to){
-    const p = px(active.cur.from), q = px(active.cur.to);
-    const raw = active.startedAt ? Math.min(1, (ts - active.startedAt)/(active.cur.dur*SPEED)) : 0;
-    const e = raw<.5 ? 2*raw*raw : 1-Math.pow(-2*raw+2,2)/2;   // ease in-out
-    const x = p.x + (q.x-p.x)*e, y = p.y + (q.y-p.y)*e;
-    // trail
-    for (let i=1;i<=5;i++){
-      const te = Math.max(0, e - i*0.035);
-      ctx.globalAlpha = (1 - i/5) * .35;
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(p.x+(q.x-p.x)*te, p.y+(q.y-p.y)*te, 4.5 - i*.6, 0, 7); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.shadowColor = col; ctx.shadowBlur = 16;
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 7); ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-  requestAnimationFrame(draw);
-}
-
-function renderSteps(op, upto){
-  stepsEl.innerHTML = op.steps.map((s,i) => `
-    <div class="tr-step ${i<=upto?"on":""} ${s.hit?"hit":""} ${s.skip?"skip":""}">
-      <span class="i">${String(i+1).padStart(2,"0")}</span>
-      <span class="b"><span class="t">${s.t}</span><span class="d">${s.d}</span></span>
-    </div>`).join("");
-}
-
-async function run(key){
-  if (running) return;
-  running = true;
-  document.querySelectorAll(".op").forEach(b => {
-    b.disabled = true; b.classList.toggle("on", b.dataset.op === key);
-  });
-  const op = OPS[key];
-  active = { op, cur:null, startedAt:0 };
-  visited = new Set(); pulsing = new Map();
-  footEl.textContent = "";
-  hintEl.textContent = `running · ${op.title}`;
-  renderSteps(op, -1);
-
-  for (let i=0;i<op.steps.length;i++){
-    const s = op.steps[i];
-    active.cur = s; active.startedAt = performance.now();
-    renderSteps(op, i);
-    visited.add(s.from);
-    pulsing.set(s.from, performance.now());
-
-    await new Promise(res => setTimeout(res, s.dur*SPEED));
-    visited.add(s.to);
-    pulsing.set(s.to, performance.now());
-    active.cur = null;
-    await new Promise(r => setTimeout(r, 70));
-  }
-
-  footEl.textContent = op.foot;
-  hintEl.textContent = "click an operation to trace it through the engine";
-  active = null; running = false;
-  document.querySelectorAll(".op").forEach(b => b.disabled = false);
-}
-
-document.querySelectorAll(".op").forEach(b => b.onclick = () => run(b.dataset.op));
-addEventListener("resize", size);
-size(); requestAnimationFrame(draw);
-
-/* copy buttons */
-document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
-  try { await navigator.clipboard.writeText(b.dataset.copy);
-        const t=b.textContent; b.textContent="copied"; setTimeout(()=>b.textContent=t,1200); }
-  catch { b.textContent="select manually"; }
-});
-</script>
+<script src="tracer.js"></script>
+<script src="home.js"></script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
 </body>
 </html>

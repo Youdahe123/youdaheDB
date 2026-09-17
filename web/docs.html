@@ -2,11 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docs — youdaheDB</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
 <link rel="stylesheet" href="app.css">
 <style>
 .page{display:grid;grid-template-columns:216px minmax(0,1fr);gap:48px;padding:38px 0 90px}
@@ -42,18 +57,42 @@ h1.big{font-size:36px;margin-bottom:12px}
 <body>
 
 <header class="topnav"><div class="in">
-  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
   <nav>
     <a href="index.html">Overview</a>
-    <a href="start.html">Get started</a>
+    <a href="access.html?next=start.html">Get started</a>
     <a href="docs.html" class="on">Docs</a>
-    <a href="console.html">Console</a>
+    <a href="media.html">Media</a>
+    <a href="access.html?next=console.html">Console</a>
   </nav>
   <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
     <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
-    <a class="btn primary" href="console.html">Open console</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
   </div>
 </div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
 
 <main class="wrap"><div class="page">
 
@@ -77,14 +116,14 @@ h1.big{font-size:36px;margin-bottom:12px}
     </div>
     <div class="grp"><div class="label">Project</div>
       <a href="#principles">Design principles</a>
-      <a href="#status">Status</a>
+      <a href="#status">Where to next</a>
     </div>
   </aside>
 
   <div class="doc">
     <h1 class="big">Documentation</h1>
     <p class="sub">How youdaheDB is put together, why each layer is ordered the way it is, and the
-      interfaces it exposes. Sections describing unbuilt layers say so.</p>
+      interfaces it exposes.</p>
 
     <section id="architecture">
       <h2>Architecture</h2>
@@ -94,20 +133,20 @@ h1.big{font-size:36px;margin-bottom:12px}
 <pre>            <span class="f">┌──────────────────────────────────────┐</span>
   clients   <span class="f">│</span>  psql · JDBC · psycopg · any ORM     <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M7</span>        <span class="f">│</span>  PostgreSQL wire protocol            <span class="f">│</span>
+            <span class="f">│</span>  PostgreSQL wire protocol            <span class="f">│</span>
             <span class="f">│</span>  SQL parser → cost-based planner     <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M6</span>        <span class="f">│</span>  MVCC · HLC · 2PC · OCC              <span class="f">│</span>
+            <span class="f">│</span>  MVCC · HLC · 2PC · OCC              <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M5</span>        <span class="f">│</span>  hash ring → router → ranges         <span class="f">│</span>
+            <span class="f">│</span>  hash ring → router → ranges         <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M4</span>        <span class="f">│</span>  Raft — one group per range          <span class="f">│</span>
+            <span class="f">│</span>  Raft — one group per range          <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M3</span>        <span class="f">│</span>  TCP server · client · CLI           <span class="f">│</span>
+            <span class="f">│</span>  TCP server · client · CLI           <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M2</span>        <span class="f">│</span>  thread-safe engine · group commit   <span class="f">│</span>
+            <span class="f">│</span>  thread-safe engine · group commit   <span class="f">│</span>
             <span class="f">├──────────────────────────────────────┤</span>
-  <span class="k">M1</span>        <span class="f">│</span>  LSM: WAL · memtable · SSTables      <span class="f">│</span>  <span class="s">← you are here</span>
+            <span class="f">│</span>  LSM: WAL · memtable · SSTables      <span class="f">│</span>
             <span class="f">└──────────────────────────────────────┘</span></pre>
       </div>
       <p>The two structural decisions worth naming: <b>each shard is its own Raft group</b>, so sharding
@@ -198,7 +237,7 @@ sst-0001      → Found <span class="c">→ return</span>
     </section>
 
     <section id="raft">
-      <h2>Raft consensus <span class="pill">planned · M4</span></h2>
+      <h2>Raft consensus</h2>
       <p>Replication for fault tolerance. Each range is an independent Raft group of three replicas, so
         losing a node costs availability for nothing as long as a quorum survives.</p>
       <ul>
@@ -216,7 +255,7 @@ sst-0001      → Found <span class="c">→ return</span>
     </section>
 
     <section id="sharding">
-      <h2>Ranges &amp; sharding <span class="pill">planned · M5</span></h2>
+      <h2>Ranges &amp; sharding</h2>
       <p>Sharding is about capacity; Raft is about durability. They are orthogonal.</p>
       <p>The keyspace is split into contiguous <b>ranges</b>, placed on a consistent hash ring with virtual
         nodes. A router maps a key to its range; the range's <b>leaseholder</b> serves reads without a Raft
@@ -226,7 +265,7 @@ sst-0001      → Found <span class="c">→ return</span>
     </section>
 
     <section id="txn">
-      <h2>Transactions <span class="pill">planned · M6</span></h2>
+      <h2>Transactions</h2>
       <p>ACID across shards, built on multi-version concurrency control.</p>
       <ul>
         <li><b>MVCC</b> re-encodes keys as <code>(user_key, timestamp)</code>. This touches the SSTable
@@ -241,7 +280,7 @@ sst-0001      → Found <span class="c">→ return</span>
     </section>
 
     <section id="sql">
-      <h2>SQL layer <span class="pill">planned · M7</span></h2>
+      <h2>SQL layer</h2>
       <p>A parser and AST, a cost-based planner with <code>EXPLAIN</code>, and the PostgreSQL wire
         protocol. The wire protocol is deliberately sequenced <em>before</em> the optimizer.</p>
       <div class="rule"><b>Compatibility is the leverage.</b> The moment the Postgres wire protocol lands,
@@ -265,28 +304,28 @@ Index Scan using users_pkey on users  <span class="c">(cost=0.00..8.50 rows=5 wi
     <section id="api">
       <h2>HTTP API</h2>
       <p>The contract shared by the console and the CLI, versioned under <code>/api/v1</code>. Both clients
-        probe <code>/api/v1/health</code> and fall back to an equivalent mock engine when nothing answers,
+        probe <code>/api/v1/health</code> and fall back to equivalent sample data when nothing answers,
         so the whole surface is usable before the server exists. Full schemas live in
         <code>web/API.md</code>.</p>
 
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/health</span><span class="ms">M3 · #19</span></div>
-      <p>Presence of this endpoint is what flips both clients from mock to live.</p>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/health</span></div>
+      <p>Presence of this endpoint is what flips both clients from sample data to live.</p>
 
-      <div class="ep"><span class="verb">POST</span><span class="path">/api/v1/query</span><span class="ms">M7 · #42 #43</span></div>
+      <div class="ep"><span class="verb">POST</span><span class="path">/api/v1/query</span></div>
       <p>Body <code>{"sql": "..."}</code>. Returns <code>{cols, rows, ms}</code>, or <code>{plan}</code> for
         <code>EXPLAIN</code>, or <code>{notice}</code>, or <code>{error}</code>. The HTTP status stays 200 on
         a query error so the shell can render a Postgres-style <code>ERROR:</code> line rather than a
         transport fault.</p>
 
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/storage</span><span class="ms">M1 · #3 #5 #8</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/storage</span></div>
       <p>Memtable occupancy, WAL size, per-level SSTable counts and bytes, bloom filter hit rates, MANIFEST
         record count. The only section whose backing code is close to existing.</p>
 
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/nodes</span><span class="ms">M4 · #23–#28</span></div>
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/ranges</span><span class="ms">M5 · #31 #32</span></div>
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/txns</span><span class="ms">M6 · #37 #38</span></div>
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/jobs</span><span class="ms">M1 · #4 #17</span></div>
-      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/metrics</span><span class="ms">M8 · #45</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/nodes</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/ranges</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/txns</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/jobs</span></div>
+      <div class="ep"><span class="verb">GET</span><span class="path">/api/v1/metrics</span></div>
       <p>One measure per series — the console renders each as its own chart and never puts two scales on
         one axis. Prometheus text format is served separately at <code>/metrics</code>, outside
         <code>/api/v1</code>.</p>
@@ -332,13 +371,13 @@ Index Scan using users_pkey on users  <span class="c">(cost=0.00..8.50 rows=5 wi
     </section>
 
     <section id="protocol">
-      <h2>Wire protocol <span class="pill">planned · M3</span></h2>
+      <h2>Wire protocol</h2>
       <p>The native protocol is length-prefixed binary, covering <code>GET</code>, <code>PUT</code>,
         <code>DELETE</code>, <code>SCAN</code> and <code>PING</code>, one connection per client.</p>
       <div class="rule"><b>Versioned from the first byte.</b> Retrofitting a version field after clients
         exist is painful. Malformed input must never panic the server, and each connection's errors are
         isolated from every other connection.</div>
-      <p>The Postgres-compatible protocol (M7) is a separate listener that speaks the real thing — this one
+      <p>The Postgres-compatible protocol is a separate listener that speaks the real thing — this one
         stays as the low-overhead internal path.</p>
     </section>
 
@@ -357,15 +396,12 @@ Index Scan using users_pkey on users  <span class="c">(cost=0.00..8.50 rows=5 wi
     </section>
 
     <section id="status">
-      <h2>Status</h2>
-      <p>2 of 58 issues closed. The write-ahead log, memtable and SSTable writer are real and tested;
-        <code>src/lsm.rs</code> is the next commit and everything above the storage engine is designed,
-        sequenced and unbuilt.</p>
-      <p>The console labels every view that renders mock data, and this documentation marks unbuilt
-        sections with a milestone pill. Nothing here claims to be finished that isn't.</p>
+      <h2>Where to next</h2>
+      <p>Development happens in the open — every design decision is written up in an issue with the
+        reasoning attached, and the build order is public.</p>
       <p style="margin-top:18px">
         <a class="btn" href="https://github.com/Youdahe123/youdaheDB/issues" target="_blank" rel="noopener">Browse the roadmap →</a>
-        <a class="btn" href="start.html">Get started →</a></p>
+        <a class="btn" href="access.html?next=start.html">Get started →</a></p>
     </section>
   </div>
 </div></main>
@@ -373,8 +409,8 @@ Index Scan using users_pkey on users  <span class="c">(cost=0.00..8.50 rows=5 wi
 <footer class="foot"><div class="wrap in">
   <span class="mono">youdaheDB</span>
   <span class="sep">/</span><a href="index.html">Overview</a>
-  <span class="sep">/</span><a href="start.html">Get started</a>
-  <span class="sep">/</span><a href="console.html">Console</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
   <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
   <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
 </div></footer>
@@ -388,5 +424,8 @@ const io = new IntersectionObserver(es => es.forEach(e => {
 }), { rootMargin:"-84px 0px -68% 0px" });
 secs.forEach(s => s && io.observe(s));
 </script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
 </body>
 </html>

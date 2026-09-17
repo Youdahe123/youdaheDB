@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The write-ahead log, byte by byte — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html" class="on">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap"><article class="article">
+  <a class="back" href="media.html">← All writing</a>
+  <div class="pmeta">Feb 22, 2026 · engineering</div>
+  <h1>The write-ahead log, byte by byte</h1>
+  <p class="stand">A write-ahead log is the smallest interesting thing in a database: an append-only file that makes a promise. Here is the format, and the trick that lets a file with no delete operation record a delete.</p>
+
+<p>Everything a database promises about durability comes down to one file that only ever gets
+appended to. Before a write is acknowledged, it goes in the log. If the process dies, the log is
+replayed on startup and the world comes back.</p>
+
+<p>The format is deliberately boring:</p>
+
+<div class="code"><div class="bar"><span>record layout</span></div><pre>[key_len: u32 LE][key bytes][val_len: u32 LE][value bytes]</pre></div>
+
+<p>Little-endian length prefixes, then the bytes. No framing headers, no field names, no schema.
+Replay reads four bytes, reads that many bytes, reads four more, reads that many. When the read
+comes up short, the log is done.</p>
+
+<h2>How do you append a delete?</h2>
+
+<p>This is the part that is actually interesting. The file only supports appending, so you cannot
+go back and remove the record you wrote earlier. A delete has to be written <i>forward</i> — a new
+record that says "whatever you saw before, that key is gone now".</p>
+
+<p>So a delete writes the key exactly like a write does, then writes <code>u32::MAX</code> where
+the value length would be:</p>
+
+<div class="code"><div class="bar"><span>wal.rs</span></div><pre>// uses u32::MAX as a tombstone marker so replay knows this was a delete
+pub fn delete(&amp;mut self, key: &amp;str) -&gt; io::Result&lt;()&gt; {
+    let key_bytes = key.as_bytes();
+    self.writer.write_all(&amp;(key_bytes.len() as u32).to_le_bytes())?;
+    self.writer.write_all(key_bytes)?;
+    self.writer.write_all(&amp;u32::MAX.to_le_bytes())?;
+    self.sync()
+}</pre></div>
+
+<p>A value length of 4,294,967,295 is not a value anyone is storing, so it is free to mean something
+else. Replay sees it and knows the record is a <b>tombstone</b> — a deliberate marker that this key
+was removed, as opposed to simply never having been there.</p>
+
+<p>That distinction sounds academic right now, with one layer and nothing under it. It stops being
+academic the moment there is an older file that still has the key. Then "deleted" and "not here"
+are completely different answers, and a log that cannot tell them apart will happily resurrect data
+you deleted.</p>
+
+<h2>Replay</h2>
+
+<p>Replay is a loop over the file returning a vector of entries, each one either a put or a
+tombstone, in the order they were written. Order is the whole guarantee: apply them front to back
+and the last word on any key wins.</p>
+  <div class="end"><a href="post-empty-cargo-toml.html">← Previous: Starting with an empty Cargo.toml</a><br><a href="post-memtable-sorted-map.html">Next: A memtable is a sorted map, plus one problem →</a></div>
+</article></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

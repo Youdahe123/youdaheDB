@@ -2,11 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Console — youdaheDB</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<script src="gate.js"></script>
+<script>YDBGate.require();</script>
 <link rel="stylesheet" href="app.css">
 <style>
 :root{ --rail:236px; }
@@ -45,11 +62,11 @@ body{font-size:13.5px;line-height:1.5;overflow:hidden}
 .topbar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
 .tbtn{padding:6px 12px;border:1px solid var(--line);font-size:12px;color:var(--t2);cursor:pointer;transition:.12s}
 .tbtn:hover{color:var(--t0);background:var(--fill)}
-.tbtn.primary{background:var(--t1);color:#000;border-color:var(--t1)}
+.tbtn.primary{background:var(--t0);color:var(--bg);border-color:var(--t0)}
 
 .body{flex:1;overflow-y:auto;overflow-x:hidden}
 .body::-webkit-scrollbar{width:10px}
-.body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1)}
+.body::-webkit-scrollbar-thumb{background:var(--thumb)}
 .view{padding:24px 28px 60px}
 .view h2{margin:0 0 4px;font-size:17px}
 .view .lede{margin:0 0 22px;font-size:13px}
@@ -60,7 +77,7 @@ body{font-size:13.5px;line-height:1.5;overflow:hidden}
 .cell{padding:16px 18px 18px}
 .cell .k{margin-top:8px;font-size:12.5px;color:var(--t2)}
 .cell .v{margin-top:6px;font-size:24px}
-.meter{margin-top:11px;height:3px;background:rgba(255,255,255,.07)}
+.meter{margin-top:11px;height:3px;background:var(--track)}
 .meter i{display:block;height:100%;background:var(--t2);transition:width .4s}
 .meter.hot i{background:var(--st-warn)}
 td{white-space:nowrap}
@@ -98,7 +115,7 @@ kbd{font-family:var(--mono);font-size:10px;color:var(--t3);border:1px solid var(
 .chart-sub{font-family:var(--mono);font-size:10px;color:var(--t4);margin-bottom:10px}
 .chart svg{display:block;width:100%;overflow:visible}
 .lvbar{display:block;width:100%}
-.tip{position:fixed;pointer-events:none;z-index:50;background:#0a0a0a;border:1px solid var(--line);
+.tip{position:fixed;pointer-events:none;z-index:50;background:var(--pop);border:1px solid var(--line);
   padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--t1);opacity:0;transition:opacity .1s;white-space:nowrap}
 .tip .tl{color:var(--t3);font-size:10px;display:block;margin-bottom:3px}
 .legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 0;font-family:var(--mono);font-size:11px;color:var(--t2)}
@@ -118,41 +135,65 @@ kbd{font-family:var(--mono);font-size:10px;color:var(--t3);border:1px solid var(
 <body>
 
 <header class="topnav"><div class="in" style="max-width:none">
-  <a href="index.html" class="logo"><span class="mark">Y</span> YOUDAHE-DB.</a>
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
   <nav>
     <a href="index.html">Overview</a>
-    <a href="start.html">Get started</a>
+    <a href="access.html?next=start.html">Get started</a>
     <a href="docs.html">Docs</a>
+    <a href="media.html">Media</a>
     <a href="console.html" class="on">Console</a>
   </nav>
   <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
     <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
   </div>
 </div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
 
 <div class="shell">
   <aside class="rail">
     <div class="nav-group">
       <div class="label">Query</div>
       <nav class="nav">
-        <a data-view="sql"><span>SQL shell</span><span class="m">M7</span></a>
-        <a data-view="schema"><span>Schema</span><span class="m">M7</span></a>
+        <a data-view="sql"><span>SQL shell</span></a>
+        <a data-view="schema"><span>Schema</span></a>
       </nav>
     </div>
     <div class="nav-group">
       <div class="label">Cluster</div>
       <nav class="nav">
-        <a data-view="cluster"><span>Nodes</span><span class="m">M4</span></a>
-        <a data-view="ranges"><span>Ranges</span><span class="m">M5</span></a>
-        <a data-view="txns"><span>Transactions</span><span class="m">M6</span></a>
+        <a data-view="cluster"><span>Nodes</span></a>
+        <a data-view="ranges"><span>Ranges</span></a>
+        <a data-view="txns"><span>Transactions</span></a>
       </nav>
     </div>
     <div class="nav-group">
       <div class="label">Engine</div>
       <nav class="nav">
-        <a data-view="storage"><span>Storage</span><span class="m">M1</span></a>
-        <a data-view="jobs"><span>Jobs</span><span class="m">M1</span></a>
-        <a data-view="metrics"><span>Metrics</span><span class="m">M8</span></a>
+        <a data-view="storage"><span>Storage</span></a>
+        <a data-view="jobs"><span>Jobs</span></a>
+        <a data-view="metrics"><span>Metrics</span></a>
       </nav>
     </div>
     <div class="rail-foot">
@@ -175,18 +216,18 @@ kbd{font-family:var(--mono);font-size:10px;color:var(--t3);border:1px solid var(
 <script>
 "use strict";
 
-/* Every view declares whether it is backed by a real engine, by mock data,
-   or is not built yet. The console is the shape of the finished product;
-   this is what keeps it honest. */
+/* View registry. Each view renders against a live node when one answers on
+   /api/v1, and against sample data otherwise — the badge in the header says
+   which one you are looking at. */
 const VIEWS = {
-  sql:     { title:"SQL shell",    milestone:"M7", issues:"#42 #43 #44",   state:"planned" },
-  schema:  { title:"Schema",       milestone:"M7", issues:"#42",           state:"planned" },
-  cluster: { title:"Nodes",        milestone:"M4", issues:"#23 #26 #33",   state:"planned" },
-  ranges:  { title:"Ranges",       milestone:"M5", issues:"#31 #32 #34",   state:"planned" },
-  txns:    { title:"Transactions", milestone:"M6", issues:"#37 #38 #39",   state:"planned" },
-  storage: { title:"Storage",      milestone:"M1", issues:"#3 #4 #8 #10",  state:"partial" },
-  jobs:    { title:"Jobs",         milestone:"M1", issues:"#4 #17 #34 #48",state:"planned" },
-  metrics: { title:"Metrics",      milestone:"M8", issues:"#45 #46",       state:"planned" },
+  sql:     { title:"SQL shell", },
+  schema:  { title:"Schema", },
+  cluster: { title:"Nodes", },
+  ranges:  { title:"Ranges", },
+  txns:    { title:"Transactions", },
+  storage: { title:"Storage", },
+  jobs:    { title:"Jobs", },
+  metrics: { title:"Metrics", },
 };
 const REPO = "https://github.com/Youdahe123/youdaheDB/issues";
 
@@ -414,7 +455,7 @@ V.sql = async () => {
     </div>
     <div id="out"></div>
     <div class="hist"><div class="label" style="margin-bottom:6px">History</div><div id="hist"></div></div>`;
-  $("#conn2").textContent = API.live ? "connected" : "mock engine";
+  $("#conn2").textContent = API.live ? "connected" : "sample data";
   const box = $("#sqlbox");
   const run = async (prefix="") => {
     const raw = box.value.trim(); if (!raw) return;
@@ -462,7 +503,7 @@ function renderMeta(cmd){
       return bar(`Table "public.${esc(arg)}"`)+tbl(["column","type","modifiers"],
         T[arg].cols.map(([n,t,m])=>[esc(n),esc(t),esc(m)+(T[arg].pk===n?" · primary key":"")]));
     case "\\du": return bar("List of roles")+tbl(["role","attributes"],[["youdahe","Superuser, Create role, Create DB"]]);
-    case "\\conninfo": return bar(API.live?"Connected to youdahedb on 127.0.0.1:6380":"Not connected — mock engine (no server on /api/v1)");
+    case "\\conninfo": return bar(API.live?"Connected to youdahedb on 127.0.0.1:6380":"Not connected — showing sample data");
     case "\\timing": return bar("Timing is on.");
     case "\\?": return bar("psql meta-commands")+tbl(["command","description"],[
       ["\\l","list databases"],["\\dt","list tables"],["\\d [table]","describe a table"],["\\du","list roles"],
@@ -678,15 +719,7 @@ V.metrics = async () => {
 };
 
 function noticeFor(v){
-  const m = VIEWS[v];
-  if (m.state === "live") return "";
-  const links = m.issues.replace(/#(\d+)/g,(_,n)=>`<a href="${REPO}/${n}" target="_blank" rel="noopener">#${n}</a>`);
-  return m.state === "partial"
-    ? `<div class="notice"><b>Partly wired.</b> The engine layers exist in <code>wal.rs</code>, <code>memtable.rs</code>
-        and <code>sstable.rs</code>, but nothing ties them together yet — the numbers below are mock until
-        <code>src/lsm.rs</code> lands. ${m.milestone} · ${links}</div>`
-    : `<div class="notice"><b>Not built yet.</b> This view is the designed end state for <b>${m.milestone}</b>
-        and renders mock data. ${links}</div>`;
+  return "";
 }
 
 async function go(name){
@@ -695,9 +728,8 @@ async function go(name){
   const m = VIEWS[name];
   $("#crumb-view").textContent = name;
   const b = $("#view-badge");
-  const state = m.state==="partial" ? "mock" : m.state==="live" ? "live" : "planned";
-  b.className = "badge " + state;
-  b.lastElementChild.textContent = `${m.state==="live"?"live":m.state==="partial"?"partly wired":"planned"} · ${m.milestone}`;
+  b.className = "badge " + (API.live ? "live" : "mock");
+  b.lastElementChild.textContent = API.live ? "live" : "sample data";
   location.hash = name;
   await V[name]();
 }
@@ -708,10 +740,13 @@ addEventListener("hashchange", () => go(location.hash.slice(1)));
 (async function boot(){
   const live = await API.probe();
   $("#dot").className = "dot " + (live ? "live" : "mock");
-  $("#conn-text").textContent = live ? "connected" : "mock engine";
-  $("#conn-sub").textContent  = live ? "127.0.0.1:6380 · youdahedb" : "no server on /api/v1";
+  $("#conn-text").textContent = live ? "connected" : "sample data";
+  $("#conn-sub").textContent  = live ? "127.0.0.1:6380 · youdahedb" : "not connected";
   go(location.hash.slice(1) || "sql");
 })();
 </script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
 </body>
 </html>

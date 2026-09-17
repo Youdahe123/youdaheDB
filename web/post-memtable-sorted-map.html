@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A memtable is a sorted map, plus one problem — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html" class="on">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap"><article class="article">
+  <a class="back" href="media.html">← All writing</a>
+  <div class="pmeta">Mar 3, 2026 · engineering</div>
+  <h1>A memtable is a sorted map, plus one problem</h1>
+  <p class="stand">The in-memory half of the engine is mostly a BTreeMap. The interesting part is what happens when you ask it for a key it does not have.</p>
+
+<p>Writes cannot go straight to disk in sorted order — that would mean rewriting a file on every
+insert. So they go into memory first, into a structure that keeps them sorted, and get written out
+in bulk later. That structure is the memtable.</p>
+
+<p>In Rust it is a <code>BTreeMap&lt;String, Option&lt;String&gt;&gt;</code> and roughly free.
+Sorted iteration comes with the type, which matters enormously later: flushing to disk becomes a
+linear walk instead of a sort.</p>
+
+<h2>The Option is doing real work</h2>
+
+<p>The value is <code>Option&lt;String&gt;</code>, not <code>String</code>. <code>None</code> is a
+tombstone — the same idea as the log, held in memory. A delete is not a removal from the map, it is
+an insert of <code>None</code>.</p>
+
+<p>Which forces a question: what does <code>get</code> return? The obvious answer is
+<code>Option&lt;String&gt;</code>, and the obvious answer is wrong.</p>
+
+<div class="code"><div class="bar"><span>memtable.rs</span></div><pre>// Found means stop searching, Deleted means stop searching,
+// NotFound means an older layer might still have it.
+// Collapsing them into a plain Option would resurrect deleted keys.
+pub enum Lookup {
+    Found(String),
+    Deleted,
+    NotFound,
+}</pre></div>
+
+<p>There are three outcomes, not two. <b>Found</b> — here is the value, stop looking.
+<b>Deleted</b> — I have a tombstone for this key, stop looking, the answer is no.
+<b>NotFound</b> — I have never heard of this key, keep looking in older layers.</p>
+
+<p>Squash <code>Deleted</code> and <code>NotFound</code> into a single <code>None</code> and the
+read path cannot tell "this was deleted" from "this isn't here", so it falls through to the older
+file, finds the pre-delete value, and returns data the user deleted. The enum is not ceremony. It
+is the bug, made unrepresentable.</p>
+
+<h2>Knowing when to stop</h2>
+
+<p>The memtable tracks its own size in bytes and answers <code>is_full()</code> against a
+threshold. That is the trigger for a flush — the moment the in-memory half hands a batch of sorted
+data to the on-disk half. Which needs an on-disk half to exist first.</p>
+  <div class="end"><a href="post-write-ahead-log.html">← Previous: The write-ahead log, byte by byte</a><br><a href="post-flush-is-not-fsync.html">Next: flush() is not fsync() →</a></div>
+</article></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

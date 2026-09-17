@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making the layers behave like one database — youdaheDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+/* theme: applied before paint so the page never flashes the wrong mode */
+(function(){
+  try{
+    var saved = localStorage.getItem('ydb-theme');
+    var light = saved ? saved === 'light'
+      : window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.className = light ? 'light' : '';
+  }catch(e){}
+})();
+</script>
+<link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+
+<header class="topnav"><div class="in">
+  <a href="index.html" class="logo"><span class="mark"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="currentColor"><path d="M12 2.8 21 5.4 12 8 3 5.4Z"/><path d="M12 9.4 21 12 12 14.6 3 12Z" opacity=".52"/><path d="M12 16 21 18.6 12 21.2 3 18.6Z" opacity=".24"/></g></svg></span></a>
+  <nav>
+    <a href="index.html">Overview</a>
+    <a href="access.html?next=start.html">Get started</a>
+    <a href="docs.html">Docs</a>
+    <a href="media.html" class="on">Media</a>
+    <a href="access.html?next=console.html">Console</a>
+  </nav>
+  <div class="right">
+    <button class="btn kbd-btn" data-palette aria-label="Open command palette" title="Search (⌘K)">⌘K</button>
+    <button class="btn" id="theme-toggle" aria-label="Toggle theme">Light</button>
+    <a class="btn" href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary" href="access.html?next=console.html">Open console</a>
+  </div>
+</div></header>
+
+<script>
+(function(){
+  var btn = document.getElementById('theme-toggle');
+  if(!btn) return;
+  var isLight = document.documentElement.classList.contains('light');
+  function apply(light){
+    isLight = light;
+    document.documentElement.classList.toggle('light', light);
+    document.body.classList.toggle('light', light);
+    btn.textContent = light ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(light));
+    window.dispatchEvent(new CustomEvent('themechange'));
+  }
+  apply(isLight);
+  btn.addEventListener('click', function(){
+    apply(!isLight);
+    try{ localStorage.setItem('ydb-theme', isLight ? 'light' : 'dark'); }catch(e){}
+  });
+})();
+</script>
+
+<main class="wrap"><article class="article">
+  <a class="back" href="media.html">← All writing</a>
+  <div class="pmeta">Sep 6, 2026 · engineering</div>
+  <h1>Making the layers behave like one database</h1>
+  <p class="stand">By now there is a log, a memtable and a growing pile of immutable files. Each works. None of them is a database until a single read can walk all three and give one answer.</p>
+
+<p>Three components, three storage media, one question: what is the current value of this key?</p>
+
+<p>The rule is <b>newest wins</b>, and the layers are already in age order. The memtable holds the
+most recent writes. SSTables are older, and among them the most recently flushed is the newest. So a
+read walks them in that order and stops at the first definite answer.</p>
+
+<h2>Where the three-state Lookup pays off</h2>
+
+<p>"First definite answer" is doing the work, and it is only expressible because
+<code>Lookup</code> has three variants:</p>
+
+<div class="code"><div class="bar"><span>the read path</span></div><pre>memtable.get(key)
+  Found(v)  -&gt; return Some(v)      // stop
+  Deleted   -&gt; return None         // stop — deliberately absent
+  NotFound  -&gt; fall through to the newest SSTable, then the next...</pre></div>
+
+<p>A tombstone is a <i>stopping</i> condition, not a miss. If <code>Deleted</code> fell through like
+<code>NotFound</code> does, the search would continue into an older table, find the value from
+before the delete, and return it. The delete would silently undo itself. The enum from the memtable
+post is what prevents that, three layers later.</p>
+
+<h2>Scanning is harder than getting</h2>
+
+<p>A range scan cannot stop at the first answer — it has to produce every live key in order, across
+all the layers at once. That is a k-way merge: hold an iterator over each source, repeatedly take
+the smallest key across all of them, and when several sources have the same key, take the one from
+the newest layer and discard the rest.</p>
+
+<p>Tombstones get dropped at the very end of the pipeline, not in the middle, which is why the merge
+iterator exposes <code>live()</code> as a separate step. The merge has to <i>see</i> the tombstone in
+order to know it should suppress the older copies of that key; only once it has won does it
+disappear.</p>
+
+<h2>One handle on the front</h2>
+
+<p><code>LsmTree</code> puts <code>put</code>, <code>get</code>, <code>delete</code>,
+<code>scan</code> and <code>flush</code> over the three layers, and handles the flush sequence:
+write the SSTable, fsync it, and only then clear the log. That order is not negotiable — clear the
+log first and a crash in between loses everything the memtable was holding.</p>
+
+<p><code>Engine</code> then wraps that in an <code>RwLock</code>, so many readers can share it and
+writers take it exclusively. Single writer, many readers, which is the shape the LSM design wants
+anyway.</p>
+  <div class="end"><a href="post-writing-an-sstable.html">← Previous: Writing an SSTable</a><br><a href="post-kill-9-in-a-loop.html">Next: kill -9, in a loop →</a></div>
+</article></main>
+
+<footer class="foot"><div class="wrap in">
+  <span class="mono">youdaheDB</span>
+  <span class="sep">/</span><a href="index.html">Overview</a>
+  <span class="sep">/</span><a href="access.html?next=start.html">Get started</a>
+  <span class="sep">/</span><a href="access.html?next=console.html">Console</a>
+  <span class="sep">/</span><a href="https://github.com/Youdahe123/youdaheDB" target="_blank" rel="noopener">GitHub</a>
+  <span style="margin-left:auto;color:var(--t4)" class="mono">std-lib only · built by Youdahe Asfaw</span>
+</div></footer>
+
+<script>
+const links = [...document.querySelectorAll(".toc a")];
+const secs  = links.map(a => document.querySelector(a.getAttribute("href")));
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ const i = secs.indexOf(e.target);
+    if (i >= 0) links.forEach((a,j) => a.classList.toggle("on", j===i)); }
+}), { rootMargin:"-84px 0px -68% 0px" });
+secs.forEach(s => s && io.observe(s));
+</script>
+<div class="cvtip" id="cvtip"></div>
+<script src="intro.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

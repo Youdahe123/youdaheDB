@@ -13,6 +13,16 @@
   --lv-0:#86b6ef; --lv-1:#5598e7; --lv-2:#2a78d6; --lv-3:#1c5cab;
   --grid:rgba(255,255,255,.07); --axis:rgba(255,255,255,.16);
 
+  /* chrome bits that used to be hardcoded — these are what broke light mode */
+  --nav-bg:rgba(0,0,0,.82); --sel:rgba(255,255,255,.15);
+  --thumb:rgba(255,255,255,.10); --track:rgba(255,255,255,.07);
+  --pop:#0a0a0a;
+  /* canvas surface — JS reads these instead of guessing */
+  --cv-edge:rgba(255,255,255,.085); --cv-ring:#000;
+  --cv-node:rgba(255,255,255,.30); --cv-node-seen:rgba(255,255,255,.55);
+  --cv-text:rgba(255,255,255,.90); --cv-text-dim:rgba(255,255,255,.55);
+  --cv-sub:rgba(255,255,255,.26); --cv-on-glow:#fff;
+
   --sans:"Geist",ui-sans-serif,-apple-system,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;
   --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,"Roboto Mono",monospace;
   --maxw:1240px;
@@ -23,20 +33,21 @@ body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--sans);
   font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 button,input,select,textarea{font:inherit;color:inherit;background:none;border:0;outline:0}
-::selection{background:rgba(255,255,255,.15)}
+::selection{background:var(--sel)}
 code{font-family:var(--mono);font-size:.92em}
 .mono{font-family:var(--mono)}
 .label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--t3)}
 
 /* ── site nav ───────────────────────────────────────── */
-.topnav{position:sticky;top:0;z-index:40;background:rgba(0,0,0,.82);
+.topnav{position:sticky;top:0;z-index:40;background:var(--nav-bg);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .topnav .in{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;
   gap:26px;padding:0 26px;height:56px}
 .logo{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12.5px;
   font-weight:500;color:var(--t0);letter-spacing:.02em;white-space:nowrap}
-.logo .mark{width:17px;height:17px;border:1px solid rgba(255,255,255,.55);
-  display:grid;place-items:center;font-size:9px;line-height:1}
+.logo .mark{width:22px;height:22px;display:grid;place-items:center;color:var(--t0)}
+.logo .mark svg{width:100%;height:100%;display:block}
+.logo .word{font-family:var(--mono);font-size:12px;color:var(--t0);letter-spacing:.02em}
 .topnav nav{display:flex;gap:22px;font-size:13px}
 .topnav nav a{color:var(--t2);transition:color .13s}
 .topnav nav a:hover{color:var(--t1)}
@@ -46,8 +57,8 @@ code{font-family:var(--mono);font-size:.92em}
 .btn{padding:7px 15px;border:1px solid var(--line);font-size:13px;color:var(--t2);
   cursor:pointer;transition:.13s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .btn:hover{color:var(--t0);background:var(--fill);border-color:var(--t4)}
-.btn.primary{background:var(--t1);color:#000;border-color:var(--t1)}
-.btn.primary:hover{background:#fff;color:#000}
+.btn.primary{background:var(--t0);color:var(--bg);border-color:var(--t0)}
+.btn.primary:hover{opacity:.86}
 
 /* ── layout ─────────────────────────────────────────── */
 .wrap{max-width:var(--maxw);margin:0 auto;padding:0 26px}
@@ -124,3 +135,223 @@ td.k{color:var(--t0)}
   .topnav nav{display:none}
   .sec{padding:44px 0}
 }
+
+/* Light theme — every token above gets a counterpart, or light mode half-applies. */
+:root.light, body.light{
+  --bg:#fbfbfa; --t0:#08090a; --t1:rgba(8,9,10,.88); --t2:rgba(8,9,10,.56);
+  --t3:rgba(8,9,10,.36); --t4:rgba(8,9,10,.18);
+  --line:rgba(8,9,10,.11); --line-soft:rgba(8,9,10,.08);
+  --fill:rgba(8,9,10,.025); --fill-2:rgba(8,9,10,.05);
+
+  --nav-bg:rgba(251,251,250,.82); --sel:rgba(8,9,10,.12);
+  --thumb:rgba(8,9,10,.16); --track:rgba(8,9,10,.06);
+  --pop:#ffffff;
+
+  --cat-1:#1f6fd0; --cat-2:#c04a1c; --cat-3:#0f7d56;
+  --lv-0:#9cc2f0; --lv-1:#5d9ae4; --lv-2:#2a6fc4; --lv-3:#1b4a8a;
+  --grid:rgba(8,9,10,.07); --axis:rgba(8,9,10,.18);
+
+  --cv-edge:rgba(8,9,10,.10); --cv-ring:#fbfbfa;
+  --cv-node:rgba(8,9,10,.28); --cv-node-seen:rgba(8,9,10,.55);
+  --cv-text:rgba(8,9,10,.88); --cv-text-dim:rgba(8,9,10,.5);
+  --cv-sub:rgba(8,9,10,.34); --cv-on-glow:#08090a;
+}
+
+/* Theme toggle button small adjustments */
+#theme-toggle{padding:6px 10px;font-size:12px}
+
+/* Smooth transitions for theme-aware properties */
+body,.topnav,.cell,.code,.btn,.pill,td,th,.notice{
+  transition:background-color .18s ease,color .18s ease,border-color .18s ease}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ── reading progress ───────────────────────────────────── */
+.readbar{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;pointer-events:none}
+.readbar i{display:block;height:100%;width:100%;background:var(--t0);
+  transform:scaleX(0);transform-origin:0 50%;transition:transform .08s linear}
+.readpct{font-family:var(--mono);font-size:10px;color:var(--t4);letter-spacing:.1em}
+
+/* ── node tooltip on the diagrams ───────────────────────── */
+.cvtip{position:fixed;z-index:70;pointer-events:none;max-width:250px;
+  background:var(--pop);border:1px solid var(--line);padding:8px 11px;
+  font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--t1);
+  opacity:0;transition:opacity .12s;box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.cvtip.on{opacity:1}
+
+/* ── command palette ────────────────────────────────────── */
+kbd{font-family:var(--mono);font-size:10px;border:1px solid var(--line);
+  padding:1px 5px;color:var(--t3);margin-right:3px}
+.pal{position:fixed;inset:0;z-index:90;display:none;justify-content:center;
+  align-items:flex-start;padding-top:14vh;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}
+:root.light .pal{background:rgba(8,9,10,.25)}
+.pal.on{display:flex}
+.pal-box{width:min(560px,92vw);background:var(--pop);border:1px solid var(--line);
+  box-shadow:0 26px 70px rgba(0,0,0,.42)}
+.pal-box input{width:100%;padding:15px 17px;font-size:14px;color:var(--t0);
+  border-bottom:1px solid var(--line-soft);background:none}
+.pal-box input::placeholder{color:var(--t4)}
+.pal-list{max-height:320px;overflow-y:auto}
+.pal-row{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:10px 17px;cursor:pointer;font-size:13px;color:var(--t2)}
+.pal-row.on{background:var(--fill-2);color:var(--t0)}
+.pal-hint{font-family:var(--mono);font-size:10px;color:var(--t4);white-space:nowrap}
+.pal-empty{padding:18px 17px;font-family:var(--mono);font-size:11.5px;color:var(--t4)}
+.pal-foot{display:flex;gap:16px;padding:9px 17px;border-top:1px solid var(--line-soft);
+  font-family:var(--mono);font-size:10px;color:var(--t4)}
+.kbd-btn{font-family:var(--mono);font-size:11px}
+
+/* ── reveal on scroll ───────────────────────────────────── */
+.rv{opacity:0;transform:translateY(8px)}
+.rv.in{opacity:1;transform:none;transition:opacity .45s ease,transform .45s ease}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+
+/* ── progressive disclosure ─────────────────────────────────
+   Plain heading, one plain sentence, then the real detail behind a
+   summary — so the page can be skimmed or read properly. */
+.more{margin-top:18px;border-top:1px solid var(--line-soft);max-width:78ch}
+.more>summary{cursor:pointer;list-style:none;padding:12px 0;font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--t3);
+  display:flex;align-items:center;gap:9px;transition:color .13s}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary::after{content:"+";font-size:13px;line-height:1}
+.more[open]>summary::after{content:"\2212"}
+.more>summary:hover{color:var(--t1)}
+.more-in{padding:2px 0 18px;color:var(--t2);font-size:13px;line-height:1.75}
+.more-in p{margin:0 0 12px}
+.more-in p:last-child{margin:0}
+.more-in b{color:var(--t1);font-weight:500}
+.more-in a{color:var(--t1);border-bottom:1px solid var(--t4)}
+
+/* the opening line of a section: bigger, plainer, no jargon */
+.lede.plain{font-size:16.5px;line-height:1.6;color:var(--t1);max-width:62ch}
+/* a demoted spec strip — keywords kept, but out of the reading path */
+.specs{margin-top:16px;font-family:var(--mono);font-size:11px;color:var(--t4);
+  letter-spacing:.04em}
+.specs span{white-space:nowrap}
+.specs i{font-style:normal;margin:0 8px;color:var(--t4);opacity:.6}
+
+/* a disclosure nested inside a small note */
+.more.tight{margin-top:11px;max-width:none}
+.more.tight>summary{padding:9px 0;font-size:10px}
+.more.tight .more-in{font-size:12px;padding-bottom:4px}
+
+/* an intro that leads straight into a diagram: no heavy bottom rule */
+.intro-sec{padding-bottom:26px;border-bottom:0}
+
+.cue{margin:10px 0 0;font-family:var(--mono);font-size:11.5px;color:var(--t3)}
+.cue::before{content:"\2193";margin-right:8px;color:var(--t4)}
+
+/* ── media index: own writing left, everything else right ── */
+.mhead{padding:64px 0 30px;border-bottom:1px solid var(--line-soft)}
+.mhead h1{font-size:40px;letter-spacing:-.03em;margin-bottom:14px}
+.mhead .lede{font-size:16.5px;color:var(--t2);max-width:56ch}
+.mcols{display:grid;grid-template-columns:minmax(0,1fr) 252px;gap:58px;
+  padding-bottom:80px;align-items:start}
+.mside{position:sticky;top:86px;padding-top:30px}
+.mside .blk{margin-bottom:34px}
+.mside .blk > .label{padding-bottom:11px;border-bottom:1px solid var(--line-soft);
+  display:block;margin-bottom:15px}
+
+.mfilter{display:flex;gap:18px;flex-wrap:wrap;padding:30px 0 4px}
+.mf{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--t4);
+  cursor:pointer;padding:0;border:0;background:none;transition:color .13s}
+.mf:hover{color:var(--t2)}
+.mf.on{color:var(--t0)}
+.mlist{padding:10px 0 0}
+.post{display:block;padding:26px 0;border-top:1px solid var(--line-soft)}
+.post .meta{font-family:var(--mono);font-size:10.5px;color:var(--t4);letter-spacing:.11em;
+  text-transform:uppercase}
+.post h2{font-size:22px;line-height:1.28;margin:9px 0 8px;letter-spacing:-.018em}
+.post h2 a{transition:opacity .13s}
+.post h2 a:hover{opacity:.6}
+.post p{color:var(--t2);font-size:14px;line-height:1.66;margin:0;max-width:64ch}
+.post.hide{display:none}
+
+/* external coverage, in the right rail */
+.ext-item{display:block;padding:0 0 18px;margin-bottom:18px;
+  border-bottom:1px solid var(--line-soft)}
+.ext-item:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.ext-item .pub{font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--t3)}
+.ext-item .t{font-size:14.5px;line-height:1.4;color:var(--t1);margin:7px 0 7px;
+  letter-spacing:-.01em;transition:opacity .13s}
+.ext-item:hover .t{opacity:.62}
+.ext-item p{font-size:12.5px;line-height:1.62;color:var(--t3);margin:0}
+.ext-item .go{display:inline-block;margin-top:9px;font-family:var(--mono);font-size:10.5px;
+  color:var(--t4)}
+.ext-item:hover .go{color:var(--t2)}
+
+.msub p{color:var(--t3);font-size:12.5px;line-height:1.6;margin:0 0 14px}
+.mrow{display:flex;flex-direction:column;gap:11px}
+.mrow input{padding:8px 0;border:0;border-bottom:1px solid var(--line);
+  font-size:13px;color:var(--t0);background:none;width:100%}
+.mrow input::placeholder{color:var(--t4)}
+.mrow input:focus{border-color:var(--t2)}
+.mrow .btn{border:0;border-bottom:1px solid var(--t0);padding:8px 0;color:var(--t0);
+  background:none;align-self:flex-start;font-size:12.5px}
+.mrow .btn:hover{background:none;opacity:.6}
+.mnote{margin-top:11px;font-family:var(--mono);font-size:10.5px;color:var(--t4);line-height:1.5}
+
+@media (max-width:900px){
+  .mcols{grid-template-columns:1fr;gap:10px}
+  .mside{position:static;padding-top:34px;border-top:1px solid var(--line-soft)}
+}
+
+/* ── a single post ──────────────────────────────────────── */
+.article{max-width:648px;margin:0 auto;padding:58px 0 84px}
+.article .back{font-family:var(--mono);font-size:11px;color:var(--t4);letter-spacing:.06em}
+.article .back:hover{color:var(--t1)}
+.article .pmeta{margin-top:30px;font-family:var(--mono);font-size:10.5px;color:var(--t4);
+  letter-spacing:.11em;text-transform:uppercase}
+.article h1{font-size:33px;line-height:1.2;letter-spacing:-.03em;margin:13px 0 17px}
+.article .stand{font-size:17px;line-height:1.62;color:var(--t2);margin:0 0 30px;
+  padding-bottom:26px;border-bottom:1px solid var(--line-soft)}
+.article p{font-size:15px;line-height:1.78;color:var(--t2);margin:0 0 19px}
+.article h2{font-size:18px;color:var(--t0);margin:38px 0 13px;letter-spacing:-.012em}
+.article b{color:var(--t1);font-weight:500}
+.article code{background:var(--fill-2);padding:1px 5px;font-size:.88em}
+.article .code{margin:24px 0}
+.article .code code{background:none;padding:0}
+.article a:not(.back){color:var(--t1);border-bottom:1px solid var(--t4)}
+.article .end{margin-top:44px;padding-top:24px;border-top:1px solid var(--line-soft);
+  font-family:var(--mono);font-size:11.5px;color:var(--t4)}
+.article .end a{color:var(--t2)}
+@media (max-width:760px){ .mhead h1{font-size:30px} .article h1{font-size:26px} }
+
+/* ── opening sequence ───────────────────────────────────────
+   The overlay is injected by intro.js and removed by it. Nothing here
+   hides page content on its own — if the script never runs, none of
+   these classes are ever applied. */
+.intro-lock{overflow:hidden}
+.intro{position:fixed;inset:0;z-index:100;background:var(--bg);
+  display:grid;place-items:center;cursor:pointer;
+  transition:transform .78s cubic-bezier(.76,0,.24,1)}
+.intro.out{transform:translateY(-101%)}
+.intro-in{display:flex;flex-direction:column;align-items:center;gap:20px}
+.intro-mark{width:54px;height:54px;color:var(--t0)}
+.intro-mark svg{width:100%;height:100%;display:block}
+.intro-mark .s{fill:currentColor;opacity:0;transform:translateY(7px);
+  animation:slab .62s cubic-bezier(.16,1,.3,1) forwards}
+.intro-mark .s1{animation-delay:.04s}
+.intro-mark .s2{animation-delay:.19s}
+.intro-mark .s3{animation-delay:.34s}
+@keyframes slab{ to{opacity:1;transform:none} }
+/* the stack settles into the logo's own tonal steps */
+.intro-mark .s2{--o:.62} .intro-mark .s3{--o:.32}
+.intro-mark .s2,.intro-mark .s3{animation-name:slab-dim}
+@keyframes slab-dim{ to{opacity:var(--o);transform:none} }
+.intro-n{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--t3)}
+
+/* headline words rise out of a mask once the overlay lifts */
+.w{display:inline-block;overflow:hidden;vertical-align:bottom}
+.w > i{display:inline-block;font-style:inherit}
+.hero-anim .w > i{transform:translateY(108%);
+  transition:transform .82s cubic-bezier(.16,1,.3,1)}
+.hero-anim.hero-in .w > i{transform:none}
+@media (prefers-reduced-motion:reduce){
+  .intro,.intro-mark .s,.hero-anim .w > i{animation:none!important;transition:none!important}
+  .hero-anim .w > i{transform:none!important}
+}
+
+/* honeypot — off-screen for bots, invisible and unreachable for people */
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
