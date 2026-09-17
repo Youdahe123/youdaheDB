@@ -43,7 +43,8 @@
     var words = splitWords(h);
     if (!words.length) return;
     h.classList.add('hero-anim');
-    words.forEach(function (w, i) { w.style.transitionDelay = (i * 42) + 'ms'; });
+    var step = document.querySelector('.intro') ? 42 : 28;   // brisker when there is no overlay
+    words.forEach(function (w, i) { w.style.transitionDelay = (i * step) + 'ms'; });
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { h.classList.add('hero-in'); });
     });
@@ -56,7 +57,14 @@
   var seen = false;
   try { seen = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
 
-  if (reduce || seen) { revealHero(false); return; }
+  /* Three cases:
+       reduced motion  — nothing moves at all
+       already visited — headline stagger only, so each page still "arrives"
+       first visit     — the full slab-and-counter overlay, then the stagger
+     The overlay is deliberately once per session: a 1.2s hold is a nice
+     entrance and an infuriating page transition. */
+  if (reduce) return;
+  if (seen) { revealHero(true); return; }
   try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
 
   var el = document.createElement('div');
