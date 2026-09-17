@@ -12,6 +12,6 @@
  * Never put the service_role key in here. That one does bypass RLS.
  */
 window.YDB_CONFIG = {
-  SUPABASE_URL: '',       // e.g. https://abcdefghijkl.supabase.co  (no trailing slash)
-  SUPABASE_ANON_KEY: ''   // Project settings -> API -> anon / public
+  SUPABASE_URL: 'https://bhsshtrjkemrdxfwimyr.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_Jx_cGGt30cFqxPzxSxjNUA_ODQAIXxT'
 };

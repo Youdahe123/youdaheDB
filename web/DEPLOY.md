@@ -5,37 +5,50 @@ Static files. No build step. Everything in `web/` is the site.
 ## 1. Waitlist database (Supabase)
 
 1. Create a project at supabase.com.
-2. SQL Editor → paste and run `supabase/waitlist.sql`. That creates the table,
-   a case-insensitive unique index on email, and the row-level-security policy.
+2. SQL Editor → run `supabase/waitlist.sql`, then `supabase/waitlist_rpc.sql`.
+   The first creates the table and a case-insensitive unique index; the second
+   adds the `join_waitlist()` function that signups actually go through.
 3. Project Settings → API → copy the **Project URL** and the **anon / public** key.
 4. Put both in `web/config.js`.
 
-The anon key ships in the page source. That is how Supabase is designed to work
-— the key identifies the project, it does not grant access. **RLS is what keeps
-the list private.** The policy allows `INSERT` and defines no read policy, so
-that key cannot read the table back.
+The publishable key ships in the page source. That is how Supabase is designed
+to work — the key identifies the project, it does not grant access.
+
+Signups go through a `security definer` function rather than a direct table
+insert. That is not incidental: PostgREST's duplicate handling needs `SELECT` on
+the table, and granting anon `SELECT` would make every signup publicly readable.
+The function dedupes inside the database instead, so **anon holds no privileges
+on `waitlist` at all** — it can call one function and nothing else.
 
 ### Verify this before you announce the site
 
 ```sh
 URL=https://YOURPROJECT.supabase.co
-KEY=your-anon-key
+KEY=your-publishable-key
+H=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json')
 
-# must print []  — an empty array, NOT rows
-curl -s "$URL/rest/v1/waitlist?select=email" -H "apikey: $KEY"
+# signup — expect 204
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/rest/v1/rpc/join_waitlist" \
+  "${H[@]}" -d '{"p_email":"test@example.com","p_source":"curl"}'
 
-# must succeed (201/204)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/rest/v1/waitlist" \
-  -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: resolution=ignore-duplicates,return=minimal" \
-  -d '{"email":"test@example.com","source":"curl"}'
+# same address again — expect 204, not a 409
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/rest/v1/rpc/join_waitlist" \
+  "${H[@]}" -d '{"p_email":"TEST@example.com","p_source":"curl"}'
+
+# reading the table — expect 401/403, never rows
+curl -s "$URL/rest/v1/waitlist?select=email" -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
 ```
 
-If the first command returns rows, RLS is not on and every signup is public.
-Stop and fix that before sharing the link.
+If that last command returns rows, stop — your signup list is public.
 
-Never put the `service_role` key in `config.js` — that one bypasses RLS.
+Never put the `service_role` / secret key in `config.js`. That one bypasses RLS.
+
+### Clearing test rows
+
+```sql
+delete from public.waitlist where source in ('curl', 'curl-preflight')
+   or email like 'browser-test-%' or email like '%@example.com';
+```
 
 ### Reading the list
 
