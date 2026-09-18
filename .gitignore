@@ -2,3 +2,6 @@
 data.wal
 *.wal
 /data
+
+# supabase CLI scratch
+supabase/.temp/
