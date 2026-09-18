@@ -1,4 +1,4 @@
-/* tracer.js — the canvas trace engine behind the diagrams on index.html.
+/* tracer.js — the canvas trace engine behind the diagrams on home.html.
    One instance per diagram, driven by a plain {nodes, edges, ops} description.
    Every colour is read from a CSS custom property, so a diagram follows the
    theme for free. No build step; the page includes this with a <script> tag.

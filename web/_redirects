@@ -1,0 +1,12 @@
+# Root routing for the static-assets deploy.
+#
+# wrangler.jsonc sets html_handling:"none", which matches request paths to
+# files exactly — no implicit index. That is what keeps every internal link a
+# direct 200 instead of a 307, but it also means "/" matches no file and falls
+# through to not_found_handling. These two lines are what give the bare domain
+# something to serve.
+#
+# Cloudflare excludes this file from the assets it serves; it is config, not a page.
+
+/            /home.html   302
+/index.html  /home.html   301

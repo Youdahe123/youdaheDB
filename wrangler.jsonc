@@ -8,7 +8,9 @@
     // Serve files at their real paths. Every internal link in the site is
     // written as "docs.html", so the alternative (auto-trailing-slash) made
     // each one a 307 redirect to the extensionless URL — an extra round trip
-    // on every click. "none" makes them all direct 200s.
+    // on every click. "none" makes them all direct 200s. The cost is that "/"
+    // matches no file either, so web/_redirects routes the bare domain to
+    // home.html — otherwise the root falls through to not_found_handling.
     "html_handling": "none",
     "not_found_handling": "404-page"
   }

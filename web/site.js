@@ -31,7 +31,7 @@ function progress() {
 /* ── command palette ──────────────────────────────────────── */
 function palette() {
   var PAGES = [
-    { label:'Overview',     hint:'index.html',   href:'index.html' },
+    { label:'Overview',     hint:'home.html',    href:'home.html' },
     { label:'Get started',  hint:'start.html',   href:'start.html' },
     { label:'Docs',         hint:'docs.html',    href:'docs.html' },
     { label:'Console',      hint:'console.html', href:'console.html' },
@@ -184,7 +184,7 @@ function reveal() {
    Sits in normal flow rather than sticky, so it scrolls away and leaves the
    nav to do the sticking. */
 function announce() {
-  var page = (location.pathname.split('/').pop() || 'index').replace(/\.html$/, '');
+  var page = (location.pathname.split('/').pop() || 'home').replace(/\.html$/, '');
   /* console locks the viewport (body overflow:hidden over a 100vh shell), so an
      extra row of chrome pushes its bottom edge off screen. access IS the waitlist. */
   if (page === 'console' || page === 'access') return;
@@ -220,7 +220,12 @@ function announce() {
       '</form>' +
       '<div class="ann-x" role="button" tabindex="0" aria-label="Dismiss">&times;</div>' +
     '</div>';
+  /* Adding a row above everything makes scroll anchoring compensate, so a
+     refresh while at the top lands just below the bar with it already out of
+     view. Pin back to the top when that is where we were. */
+  var atTop = (window.scrollY || document.documentElement.scrollTop || 0) < 2;
   nav.parentNode.insertBefore(bar, nav);
+  if (atTop) window.scrollTo(0, 0);
 
   /* ── rotation ── */
   var msgs = bar.querySelectorAll('.ann-msg'), at = 0, timer = null, paused = false;
