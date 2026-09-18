@@ -1,6 +1,6 @@
 # youdaheDB console API (v1)
 
-The contract shared by **`web/index.html`** and **`cli/youdahedb`**. Both detect
+The contract shared by **`web/console.html`** and **`cli/youdahedb`**. Both detect
 the 404 on `/api/v1/health` and fall back to an equivalent mock engine, so the
 whole UX is usable and demoable before any of this is implemented.
 
@@ -128,5 +128,5 @@ separate endpoint at the server root (`/metrics`, not under `/api/v1`).
 
 ## `GET /` — *M3*
 
-Serves the console. Embed with `include_str!("../web/index.html")` so the
+Serves the console. Embed with `include_str!("../web/console.html")` so the
 server stays a single binary with no asset directory to ship.

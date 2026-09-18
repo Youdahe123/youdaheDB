@@ -42,7 +42,7 @@
     /* called in <head> on a gated page, before anything renders */
     require: function () {
       if (this.unlocked()) return;
-      var here = location.pathname.split('/').pop() || 'index.html';
+      var here = location.pathname.split('/').pop() || 'home.html';
       location.replace('access.html?next=' + encodeURIComponent(here + location.search + location.hash));
     }
   };
