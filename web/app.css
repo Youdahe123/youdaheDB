@@ -15,6 +15,8 @@
 
   /* chrome bits that used to be hardcoded — these are what broke light mode */
   --nav-bg:rgba(0,0,0,.82); --sel:rgba(255,255,255,.15);
+  /* announcement slab — inverted against the page, like .btn.primary */
+  --ann-bg:#fff; --ann-fg:#000; --ann-dim:rgba(0,0,0,.62); --ann-line:rgba(0,0,0,.20);
   --thumb:rgba(255,255,255,.10); --track:rgba(255,255,255,.07);
   --pop:#0a0a0a;
   /* canvas surface — JS reads these instead of guessing */
@@ -144,6 +146,7 @@ td.k{color:var(--t0)}
   --fill:rgba(8,9,10,.025); --fill-2:rgba(8,9,10,.05);
 
   --nav-bg:rgba(251,251,250,.82); --sel:rgba(8,9,10,.12);
+  --ann-bg:#08090a; --ann-fg:#fbfbfa; --ann-dim:rgba(251,251,250,.64); --ann-line:rgba(251,251,250,.24);
   --thumb:rgba(8,9,10,.16); --track:rgba(8,9,10,.06);
   --pop:#ffffff;
 
@@ -380,4 +383,63 @@ footer.foot  { view-transition-name: sitefoot }
    only — nesting it in a media query is needlessly fragile. */
 @media (prefers-reduced-motion:reduce){
   ::view-transition-old(root),::view-transition-new(root){ animation:none !important }
+}
+
+/* ── announcement bar ───────────────────────────────────────
+   Injected by site.js above .topnav. An inverted slab: the page's foreground
+   colour becomes its background, so it reads as a banner in both themes and
+   needs no :root.light override of its own — the four --ann-* tokens do it. */
+.ann{position:relative;z-index:50;background:var(--ann-bg);color:var(--ann-fg)}
+.ann .in{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;gap:15px;
+  padding:0 26px;min-height:46px}
+.ann-dot{flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--st-good);
+  animation:ann-pulse 2.6s ease-in-out infinite}
+@keyframes ann-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* fixed-height window; the messages stack inside it and cross-fade through */
+.ann-rot{position:relative;flex:1 1 auto;height:22px;min-width:0;overflow:hidden}
+.ann-msg{position:absolute;inset:0;display:flex;align-items:center;gap:9px;font-size:13.5px;
+  color:var(--ann-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity .4s ease,transform .4s ease}
+.ann-msg.on{opacity:1;transform:none;pointer-events:auto}
+.ann-msg b{color:var(--ann-fg);font-weight:600}
+.ann-msg .tag{flex:0 0 auto;padding:2px 7px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ann-bg);background:var(--ann-fg)}
+
+.ann-cta{flex:0 0 auto;padding:6px 14px;font-size:12.5px;font-weight:500;cursor:pointer;
+  background:var(--ann-fg);color:var(--ann-bg);white-space:nowrap;transition:opacity .13s}
+.ann-cta:hover{opacity:.82}
+.ann-x{flex:0 0 auto;padding:4px 7px;font-size:16px;line-height:1;color:var(--ann-dim);
+  cursor:pointer;transition:color .13s}
+.ann-x:hover{color:var(--ann-fg)}
+
+/* inline signup — swaps in where the rotator was, same row height */
+.ann-form{display:none;flex:1 1 auto;align-items:center;gap:9px;min-width:0}
+.ann.open .ann-form{display:flex}
+.ann.open .ann-rot,.ann.open .ann-cta{display:none}
+.ann-lead{flex:0 0 auto;font-size:13.5px;font-weight:600;color:var(--ann-fg);white-space:nowrap}
+.ann-form input{flex:0 1 300px;min-width:0;padding:6px 10px;font-size:12.5px;
+  color:var(--ann-fg);background:none;border:1px solid var(--ann-line)}
+.ann-form input::placeholder{color:var(--ann-dim)}
+.ann-form input:focus{border-color:var(--ann-fg)}
+.ann-form button{flex:0 0 auto;padding:6px 14px;font-size:12.5px;font-weight:500;cursor:pointer;
+  background:var(--ann-fg);color:var(--ann-bg);border:0;white-space:nowrap;transition:opacity .13s}
+.ann-form button:hover:not(:disabled){opacity:.82}
+.ann-form button:disabled{opacity:.5;cursor:default}
+.ann-note{font-size:12.5px;color:var(--ann-dim);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ann-note.ok{color:var(--ann-fg);font-weight:500}
+.ann-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+
+@media (max-width:640px){
+  .ann .in{padding:0 16px;gap:11px;min-height:44px}
+  .ann-msg{font-size:12.5px}
+  .ann-msg .tag{display:none}
+  .ann-lead{display:none}
+  .ann-form input{flex:1 1 auto}
+}
+@media (prefers-reduced-motion:reduce){
+  .ann-dot{animation:none}
+  .ann-msg{transition:none}
 }

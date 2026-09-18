@@ -179,7 +179,140 @@ function reveal() {
   setTimeout(showAll, 2000);   // failsafe: never strand content at opacity 0
 }
 
-function boot() { progress(); palette(); reveal(); }
+/* ── announcement bar ─────────────────────────────────────────
+   One rotating strip above the nav, on every page that has room for it.
+   Sits in normal flow rather than sticky, so it scrolls away and leaves the
+   nav to do the sticking. */
+function announce() {
+  var page = (location.pathname.split('/').pop() || 'index').replace(/\.html$/, '');
+  /* console locks the viewport (body overflow:hidden over a 100vh shell), so an
+     extra row of chrome pushes its bottom edge off screen. access IS the waitlist. */
+  if (page === 'console' || page === 'access') return;
+  if (document.querySelector('.shell')) return;
+  try { if (localStorage.getItem('ydb-ann') === 'off') return; } catch (e) {}
+
+  var nav = document.querySelector('.topnav');
+  if (!nav || !nav.parentNode) return;
+
+  var MSGS = [
+    '<span class="tag">Beta</span><span><b>Looking for beta users.</b> The storage engine runs today — early access as each layer lands.</span>',
+    '<span class="tag">Waitlist</span><span><b>Early access goes out in batches.</b> A sandbox passcode, plus build notes as they ship.</span>',
+    '<span class="tag">Status</span><span>Built in the open, one layer at a time — <b>v0.1, active development.</b></span>'
+  ];
+
+  var bar = document.createElement('div');
+  bar.className = 'ann';
+  bar.innerHTML =
+    '<div class="in">' +
+      '<i class="ann-dot"></i>' +
+      '<div class="ann-rot">' +
+        MSGS.map(function (m, i) {
+          return '<div class="ann-msg' + (i ? '' : ' on') + '">' + m + '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="ann-cta">Join the waitlist &rarr;</div>' +
+      '<form class="ann-form" novalidate>' +
+        '<span class="ann-lead">Beta access</span>' +
+        '<input type="email" placeholder="you@company.com" autocomplete="email" aria-label="Email address">' +
+        '<input class="ann-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+        '<button type="submit">Join</button>' +
+        '<span class="ann-note"></span>' +
+      '</form>' +
+      '<div class="ann-x" role="button" tabindex="0" aria-label="Dismiss">&times;</div>' +
+    '</div>';
+  nav.parentNode.insertBefore(bar, nav);
+
+  /* ── rotation ── */
+  var msgs = bar.querySelectorAll('.ann-msg'), at = 0, timer = null, paused = false;
+  var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function step() {
+    if (paused || document.hidden) return;
+    msgs[at].classList.remove('on');
+    at = (at + 1) % msgs.length;
+    msgs[at].classList.add('on');
+  }
+  /* Reduced motion still rotates — the transition is what gets dropped, in CSS.
+     Stopping entirely would hide two of the three messages permanently. */
+  if (msgs.length > 1) timer = setInterval(step, still ? 7000 : 5200);
+  bar.addEventListener('mouseenter', function () { paused = true; });
+  bar.addEventListener('mouseleave', function () { paused = false; });
+
+  /* ── dismiss ── */
+  function dismiss() {
+    if (timer) clearInterval(timer);
+    bar.remove();
+    try { localStorage.setItem('ydb-ann', 'off'); } catch (e) {}
+  }
+  var x = bar.querySelector('.ann-x');
+  x.addEventListener('click', dismiss);
+  x.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismiss(); }
+  });
+
+  /* ── signup ── */
+  var form = bar.querySelector('.ann-form');
+  var input = form.querySelector('input[type=email]');
+  var hp = form.querySelector('.ann-hp');
+  var btn = form.querySelector('button');
+  var note = form.querySelector('.ann-note');
+
+  bar.querySelector('.ann-cta').addEventListener('click', function () {
+    bar.classList.add('open');
+    if (timer) { clearInterval(timer); timer = null; }
+    input.focus();
+  });
+
+  /* waitlist.js and its config only ship on two pages, so pull them in on first
+     use rather than adding two script tags to all fourteen. */
+  function waitlist(done) {
+    if (window.YDBWaitlist) return done(true);
+    var load = function (src, next) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function () { next(); };
+      s.onerror = function () { next(); };
+      document.head.appendChild(s);
+    };
+    load('config.js', function () {
+      load('waitlist.js', function () { done(!!window.YDBWaitlist); });
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (hp.value) { note.className = 'ann-note ok'; note.textContent = "You're on the list."; return; }
+
+    btn.disabled = true;
+    note.className = 'ann-note';
+    note.textContent = 'Sending…';
+
+    waitlist(function (ok) {
+      if (!ok) { btn.disabled = false; location.href = 'access.html'; return; }
+
+      YDBWaitlist.join(input.value, 'announce-bar-' + page).then(function (r) {
+        btn.disabled = false;
+        if (r.status === 'ok') {
+          note.className = 'ann-note ok';
+          note.textContent = "You're on the list — we'll email when a slot opens.";
+          input.disabled = true; btn.disabled = true;
+        } else if (r.status === 'invalid') {
+          note.textContent = 'That address does not look right.';
+          input.select();
+        } else if (r.status === 'network') {
+          note.textContent = "Couldn't reach the waitlist. Try again?";
+        } else if (r.status === 'unconfigured') {
+          location.href = 'access.html';
+        } else {
+          note.textContent = 'Something went wrong. Try again?';
+          console.error('[waitlist]', r.code, r.detail);
+        }
+      });
+    });
+  });
+}
+
+function boot() { announce(); progress(); palette(); reveal(); }
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot);
 else boot();
 
