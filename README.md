@@ -145,6 +145,37 @@ fn example(db: &youdaheDB::Engine) -> std::io::Result<()> {
 }
 ```
 
+`scan_range(start, end)` returns keys in `[start, end)`: the start is included,
+the end is excluded, and `None` leaves either endpoint unbounded. Equal or
+reversed endpoints yield no rows. `scan_prefix(prefix)` returns keys starting
+with the prefix; an empty prefix matches every key. Both methods copy their
+bounds and return the same `Scan` guard as `scan()`. Keys use Rust string
+ordering and prefix matching without Unicode normalization.
+
+```rust
+use youdaheDB::Engine;
+
+fn main() -> std::io::Result<()> {
+    let db = Engine::open("./data")?;
+    db.put("user:1", "youdahe")?;
+    {
+        let scan = db.scan_range(Some("user:"), Some("user;"))?;
+        for entry in scan.iter()? {
+            let (key, value) = entry?;
+            println!("{key} = {value}");
+        }
+    } // releases the read lock before the next write
+    db.delete("user:1")?;
+    Ok(())
+}
+```
+
+For a prefix view, replace the scan line with
+`let scan = db.scan_prefix("user:")?;`. Both forms preserve newest-value and
+tombstone semantics. They stream through existing sources; they do not yet
+seek to the lower bound, and may surface I/O errors while reading earlier keys.
+Even an empty scan holds its read lock until its guard is dropped.
+
 Keep scan scopes short. Do not call other `Engine` methods while holding a
 scan guard: writes would deadlock, and even recursive reads can deadlock if
 a writer is queued. Slow output from the REPL can hold a scan open longer.

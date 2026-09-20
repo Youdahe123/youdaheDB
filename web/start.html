@@ -213,30 +213,42 @@ youdahedb=# <span class="f">select id, email from users limit 3;</span>
     <section class="step" id="embed">
       <div class="num">STEP 6</div>
       <h2>Embed the engine</h2>
-      <p>The storage engine is a library first and a server second. This is the API that
-        <a href="https://github.com/Youdahe123/youdaheDB/issues/3" target="_blank" rel="noopener"
-           style="color:var(--t1);border-bottom:1px solid var(--t4)">issue #3</a> introduces.</p>
+      <p>Use the public <code>Engine</code> API to read and write persistent data.
+        Range scans stream sorted live keys across the memtable and SSTables.</p>
       <div class="code">
-        <div class="bar"><span>rust</span><span class="copy" data-copy="let mut db = LsmTree::open(&quot;./data&quot;)?;">copy</span></div>
-<pre><span class="k">use</span> youdahedb::LsmTree;
+        <div class="bar"><span>rust</span><span class="copy" data-copy="use youdaheDB::Engine;
 
-<span class="k">fn</span> <span class="f">main</span>() -&gt; std::io::Result&lt;()&gt; {
-    <span class="c">// opens the dir, loads SSTables newest-first, replays the WAL</span>
-    <span class="k">let mut</span> db = LsmTree::open(<span class="s">"./data"</span>)?;
+fn main() -&gt; std::io::Result&lt;()&gt; {
+    let db = Engine::open(&quot;./data&quot;)?;
+    db.put(&quot;user:1&quot;, &quot;youdahe&quot;)?;
+    {
+        let scan = db.scan_range(Some(&quot;user:&quot;), Some(&quot;user;&quot;))?;
+        for entry in scan.iter()? {
+            let (key, value) = entry?;
+            println!(&quot;{key} = {value}&quot;);
+        }
+    } // releases the read lock before the next write
+    db.delete(&quot;user:1&quot;)?;
+    Ok(())
+}">copy</span></div>
+<pre>use youdaheDB::Engine;
 
-    db.put(<span class="s">"user:1"</span>, <span class="s">"youdahe"</span>)?;
-    <span class="k">let</span> v = db.get(<span class="s">"user:1"</span>)?;
-    db.delete(<span class="s">"user:1"</span>)?;
-
-    <span class="c">// sorted iteration across memtable + every SSTable</span>
-    <span class="k">for</span> (k, v) <span class="k">in</span> db.scan(<span class="s">"user:"</span>..<span class="s">"user;"</span>) {
-        <span class="f">println!</span>(<span class="s">"{k} = {v}"</span>);
-    }
-    <span class="k">Ok</span>(())
+fn main() -&gt; std::io::Result&lt;()&gt; {
+    let db = Engine::open(&quot;./data&quot;)?;
+    db.put(&quot;user:1&quot;, &quot;youdahe&quot;)?;
+    {
+        let scan = db.scan_range(Some(&quot;user:&quot;), Some(&quot;user;&quot;))?;
+        for entry in scan.iter()? {
+            let (key, value) = entry?;
+            println!(&quot;{key} = {value}&quot;);
+        }
+    } // releases the read lock before the next write
+    db.delete(&quot;user:1&quot;)?;
+    Ok(())
 }</pre>
       </div>
-      <div class="notice"><b>Not yet on crates.io.</b> <code>LsmTree</code> is the next thing being built —
-        today <code>main.rs</code> drives the WAL and memtable directly and SSTables are not reachable from it.</div>
+      <div class="notice"><b>Not yet on crates.io.</b> Use a local path dependency to this repository. <code>Engine</code> supports
+        WAL recovery, SSTable flushes, and full, range, and prefix scans.</div>
     </section>
 
     <section class="step" id="next" style="padding-bottom:0">
