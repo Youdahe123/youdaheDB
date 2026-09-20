@@ -21,13 +21,29 @@ pub struct Engine {
 #[must_use = "a scan guard holds a read lock until dropped"]
 pub struct Scan<'a> {
     tree: RwLockReadGuard<'a, LsmTree>,
+    selection: Selection,
+}
+
+enum Selection {
+    All,
+    Range {
+        start: Option<String>,
+        end: Option<String>,
+    },
+    Prefix(String),
 }
 
 impl Scan<'_> {
     /// Streams sorted live entries, retaining only the merge iterator's state.
     /// I/O errors can occur both when opening the sources and while iterating.
     pub fn iter(&self) -> io::Result<impl Iterator<Item = io::Result<(String, String)>> + '_> {
-        self.tree.scan()
+        let merge = self.tree.scan_merge()?;
+        Ok(match &self.selection {
+            Selection::All => merge,
+            Selection::Range { start, end } => merge.with_range(start.as_deref(), end.as_deref()),
+            Selection::Prefix(prefix) => merge.with_prefix(prefix),
+        }
+        .live())
     }
 }
 
@@ -100,7 +116,57 @@ impl Engine {
     /// # }
     /// ```
     pub fn scan(&self) -> io::Result<Scan<'_>> {
-        Ok(Scan { tree: self.read()? })
+        Ok(Scan {
+            tree: self.read()?,
+            selection: Selection::All,
+        })
+    }
+
+    /// Locks a view of live keys in the half-open interval `[start, end)`.
+    ///
+    /// `None` leaves that endpoint unbounded. Equal or reversed endpoints yield
+    /// no rows. Keys use Rust string ordering without Unicode normalization.
+    /// Bounds are copied, so their inputs need not outlive the returned guard.
+    /// The guard holds its read lock until dropped, even for an empty range.
+    /// Iteration streams from the beginning of each source rather than seeking;
+    /// errors below the lower bound can therefore also be returned.
+    ///
+    /// ```no_run
+    /// use youdaheDB::Engine;
+    ///
+    /// fn main() -> std::io::Result<()> {
+    ///     let db = Engine::open("./data")?;
+    ///     db.put("user:1", "youdahe")?;
+    ///     {
+    ///         let scan = db.scan_range(Some("user:"), Some("user;"))?;
+    ///         for entry in scan.iter()? {
+    ///             let (key, value) = entry?;
+    ///             println!("{key} = {value}");
+    ///         }
+    ///     } // releases the read lock before the next write
+    ///     db.delete("user:1")?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn scan_range(&self, start: Option<&str>, end: Option<&str>) -> io::Result<Scan<'_>> {
+        Ok(Scan {
+            tree: self.read()?,
+            selection: Selection::Range {
+                start: start.map(str::to_owned),
+                end: end.map(str::to_owned),
+            },
+        })
+    }
+
+    /// Locks a view of live keys starting with `prefix`; an empty prefix matches all.
+    ///
+    /// Matching uses `str::starts_with`, without Unicode normalization. The prefix
+    /// is copied. Lock lifetime, streaming, and errors follow [`Self::scan_range`].
+    pub fn scan_prefix(&self, prefix: &str) -> io::Result<Scan<'_>> {
+        Ok(Scan {
+            tree: self.read()?,
+            selection: Selection::Prefix(prefix.to_owned()),
+        })
     }
 
     /// Flushes the current memtable while excluding other operations.

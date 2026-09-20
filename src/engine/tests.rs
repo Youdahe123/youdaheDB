@@ -170,6 +170,8 @@ fn poisoned_writer_returns_errors_from_every_operation() {
         db.put("k", "v").unwrap_err(),
         db.delete("k").unwrap_err(),
         db.scan().err().unwrap(),
+        db.scan_range(None, None).err().unwrap(),
+        db.scan_prefix("").err().unwrap(),
         db.flush().unwrap_err(),
         db.sstable_count().unwrap_err(),
     ];
@@ -296,4 +298,99 @@ fn a_symlink_does_not_bypass_directory_ownership() {
     let error = Engine::open(alias.to_str().unwrap()).err().unwrap();
     assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
     db.put("k", "v").unwrap();
+}
+
+#[test]
+fn bounded_scan_guards_exclude_writers_until_dropped() {
+    let dir = TestDir::new();
+    let db = dir.open();
+    db.put("a", "old").unwrap();
+    db.put("b", "old").unwrap();
+    for prefix in [false, true] {
+        for mode in 0..3 {
+            let scan = if prefix {
+                db.scan_prefix(if mode == 2 { "missing" } else { "" })
+                    .unwrap()
+            } else {
+                db.scan_range(Some(if mode == 2 { "z" } else { "a" }), Some("c"))
+                    .unwrap()
+            };
+            let mut iter = scan.iter().unwrap();
+            if mode == 0 {
+                assert!(iter.next().unwrap().is_ok());
+            } else {
+                for row in iter.by_ref() {
+                    row.unwrap();
+                }
+            }
+            drop(iter);
+            let other = db.clone();
+            let (attempt_tx, attempt_rx) = mpsc::channel();
+            let (done_tx, done_rx) = mpsc::channel();
+            let worker = thread::spawn(move || {
+                attempt_tx
+                    .send(matches!(
+                        other.inner.try_write(),
+                        Err(std::sync::TryLockError::WouldBlock)
+                    ))
+                    .unwrap();
+                done_tx.send(other.put("b", "new")).unwrap();
+            });
+            assert!(attempt_rx.recv_timeout(Duration::from_secs(5)).unwrap());
+            assert!(matches!(done_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+            drop(scan);
+            done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            worker.join().unwrap();
+        }
+    }
+}
+
+#[test]
+fn bounded_scans_surface_open_and_iteration_errors_and_release_lock() {
+    for prefix in [false, true] {
+        for missing in [false, true] {
+            let dir = TestDir::new();
+            let db = dir.open();
+            db.put("a", "first").unwrap();
+            db.put("b", "second").unwrap();
+            db.flush().unwrap();
+            let path = dir.0.join("sst-000000.sst");
+            if missing {
+                fs::remove_file(&path).unwrap();
+            } else {
+                // One intact record followed by a truncated key length.
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_len(15)
+                    .unwrap();
+            }
+            let scan = if prefix {
+                db.scan_prefix("").unwrap()
+            } else {
+                db.scan_range(Some("a"), Some("c")).unwrap()
+            };
+            if missing {
+                assert_eq!(scan.iter().err().unwrap().kind(), io::ErrorKind::NotFound);
+            } else {
+                let mut iter = scan.iter().unwrap();
+                assert_eq!(iter.next().unwrap().unwrap(), ("a".into(), "first".into()));
+                assert_eq!(
+                    iter.next().unwrap().unwrap_err().kind(),
+                    io::ErrorKind::UnexpectedEof
+                );
+            }
+            assert!(matches!(
+                db.inner.try_write(),
+                Err(std::sync::TryLockError::WouldBlock)
+            ));
+            drop(scan);
+            assert!(db.inner.try_write().is_ok());
+            db.put("new", "v").unwrap();
+        }
+    }
 }
