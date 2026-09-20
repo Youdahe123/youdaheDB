@@ -172,35 +172,18 @@ youdahedb=# <span class="k">select</span> id, email <span class="k">from</span> 
 <span class="k">$</span> echo <span class="s">"select 1"</span> | youdahedb</pre>
       </div>
       <div class="code">
-        <div class="bar"><span>embedded — rust</span><span class="copy" data-copy="use youdaheDB::Engine;
+        <div class="bar"><span>embedded — rust</span><span class="copy" data-copy="let mut db = LsmTree::open(&quot;./data&quot;)?;">copy</span></div>
+<pre><span class="k">use</span> youdahedb::LsmTree;
 
-fn main() -&gt; std::io::Result&lt;()&gt; {
-    let db = Engine::open(&quot;./data&quot;)?;
-    db.put(&quot;user:1&quot;, &quot;youdahe&quot;)?;
-    {
-        let scan = db.scan_range(Some(&quot;user:&quot;), Some(&quot;user;&quot;))?;
-        for entry in scan.iter()? {
-            let (key, value) = entry?;
-            println!(&quot;{key} = {value}&quot;);
-        }
-    } // releases the read lock before the next write
-    db.delete(&quot;user:1&quot;)?;
-    Ok(())
-}">copy</span></div>
-<pre>use youdaheDB::Engine;
+<span class="k">let mut</span> db = LsmTree::open(<span class="s">"./data"</span>)?;
 
-fn main() -&gt; std::io::Result&lt;()&gt; {
-    let db = Engine::open(&quot;./data&quot;)?;
-    db.put(&quot;user:1&quot;, &quot;youdahe&quot;)?;
-    {
-        let scan = db.scan_range(Some(&quot;user:&quot;), Some(&quot;user;&quot;))?;
-        for entry in scan.iter()? {
-            let (key, value) = entry?;
-            println!(&quot;{key} = {value}&quot;);
-        }
-    } // releases the read lock before the next write
-    db.delete(&quot;user:1&quot;)?;
-    Ok(())
+db.put(<span class="s">"user:1"</span>, <span class="s">"youdahe"</span>)?;
+<span class="k">let</span> v = db.get(<span class="s">"user:1"</span>)?;
+db.delete(<span class="s">"user:1"</span>)?;
+
+<span class="c">// sorted iteration across memtable + every SSTable</span>
+<span class="k">for</span> (k, v) <span class="k">in</span> db.scan(<span class="s">"user:"</span>..<span class="s">"user;"</span>) {
+    <span class="f">println!</span>(<span class="s">"{k} = {v}"</span>);
 }</pre>
       </div>
     </div>
