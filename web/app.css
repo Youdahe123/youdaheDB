@@ -75,9 +75,9 @@ p{margin:0 0 14px}
 
 /* ── grid cells ─────────────────────────────────────── */
 .grid{display:grid;border-top:1px solid var(--line-soft);border-left:1px solid var(--line-soft)}
-.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
-.g4{grid-template-columns:repeat(auto-fit,minmax(195px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(min(195px,100%),1fr))}
 .cell{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
   padding:20px 22px 22px;position:relative}
 .cell::after{content:"+";position:absolute;right:-5px;bottom:-8px;color:var(--t4);font-size:11px;line-height:1}
@@ -97,7 +97,7 @@ p{margin:0 0 14px}
   letter-spacing:.13em;text-transform:uppercase}
 .code .bar .copy{margin-left:auto;cursor:pointer;text-transform:none;letter-spacing:0;font-size:11px}
 .code .bar .copy:hover{color:var(--t1)}
-.code pre{margin:0;padding:15px 16px;white-space:pre;color:var(--t2)}
+.code pre{margin:0;padding:15px 16px;white-space:pre;color:var(--t2);overflow-x:auto}
 .code .c{color:var(--t4)}          /* comment  */
 .code .k{color:var(--cat-1)}       /* keyword  */
 .code .s{color:var(--st-good)}     /* string   */
@@ -134,8 +134,18 @@ td.k{color:var(--t0)}
 
 @media (max-width:840px){
   h1{font-size:31px} h2{font-size:21px}
-  .topnav nav{display:none}
   .sec{padding:44px 0}
+
+  /* The nav drops to its own row rather than disappearing: on a phone the
+     header is the only way to reach the other pages. It scrolls sideways
+     if the links outgrow the width, with the scrollbar hidden. */
+  .topnav .in{flex-wrap:wrap;height:auto;gap:0 14px;padding:0 16px}
+  .logo{order:1;min-height:53px}
+  .topnav .right{order:2;min-height:53px}
+  .topnav nav{order:3;width:100%;gap:20px;padding:0 0 11px;
+    overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .topnav nav::-webkit-scrollbar{display:none}
+  .topnav nav a{white-space:nowrap}
 }
 
 /* Light theme — every token above gets a counterpart, or light mode half-applies. */
@@ -439,6 +449,11 @@ footer.foot  { view-transition-name: sitefoot }
 .ann-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 
 @media (max-width:640px){
+  .wrap{padding:0 16px}
+  .btn{padding:7px 12px;font-size:12.5px}
+  .kbd-btn{display:none}   /* a keyboard shortcut hint is noise without a keyboard */
+  .ann-sub{display:none}   /* keep the headline, drop the trailing sentence */
+
   .ann .in{padding:0 16px;gap:11px;min-height:44px}
   .ann-msg{font-size:12.5px}
   .ann-msg .tag{display:none}

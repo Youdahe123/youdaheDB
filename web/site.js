@@ -195,9 +195,9 @@ function announce() {
   if (!nav || !nav.parentNode) return;
 
   var MSGS = [
-    '<span class="tag">Beta</span><span><b>Looking for beta users.</b> The storage engine runs today — early access as each layer lands.</span>',
-    '<span class="tag">Waitlist</span><span><b>Early access goes out in batches.</b> A sandbox passcode, plus build notes as they ship.</span>',
-    '<span class="tag">Status</span><span>Built in the open, one layer at a time — <b>v0.1, active development.</b></span>'
+    '<span class="tag">Beta</span><span><b>Looking for beta users.</b><span class="ann-sub"> The storage engine runs today — early access as each layer lands.</span></span>',
+    '<span class="tag">Waitlist</span><span><b>Early access goes out in batches.</b><span class="ann-sub"> A sandbox passcode, plus build notes as they ship.</span></span>',
+    '<span class="tag">Status</span><span><span class="ann-sub">Built in the open, one layer at a time — </span><b>v0.1, active development.</b></span>'
   ];
 
   var bar = document.createElement('div');

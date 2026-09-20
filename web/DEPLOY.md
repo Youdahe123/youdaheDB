@@ -70,6 +70,23 @@ select email, source, created_at from public.waitlist order by created_at desc;
 
 TLS is automatic once DNS resolves.
 
+### Bump the asset version when you change CSS or JS
+
+Every page references its stylesheet and scripts with a `?v=` stamp, e.g.
+`app.css?v=20260920`. Browsers cache those files aggressively, so without a new
+stamp a returning visitor gets the old CSS alongside the new HTML — which
+usually shows up as a broken header rather than an obvious failure.
+
+There is no build step, so this is manual. After editing anything in `web/*.css`
+or `web/*.js`, bump the stamp everywhere:
+
+```sh
+cd web
+OLD=20260920 NEW=$(date +%Y%m%d)
+sed -i '' "s/?v=$OLD/?v=$NEW/g" *.html
+grep -c "?v=$NEW" *.html    # every page should report a non-zero count
+```
+
 ## 3. Before you announce
 
 - [ ] `config.js` filled in, and the `select` curl above returns `[]`

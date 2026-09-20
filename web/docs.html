@@ -22,7 +22,7 @@
   }catch(e){}
 })();
 </script>
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=20260920">
 <style>
 .page{display:grid;grid-template-columns:216px minmax(0,1fr);gap:48px;padding:38px 0 90px}
 .toc{position:sticky;top:82px;align-self:start;max-height:calc(100vh - 110px);overflow-y:auto}
@@ -51,7 +51,7 @@ h1.big{font-size:36px;margin-bottom:12px}
 .ep .verb{font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--line);color:var(--cat-1)}
 .ep .path{font-family:var(--mono);font-size:14px;color:var(--t0)}
 .ep .ms{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--t4)}
-@media (max-width:880px){ .page{grid-template-columns:1fr;gap:0} .toc{display:none} }
+@media (max-width:880px){ .page{grid-template-columns:minmax(0,1fr);gap:0} .toc{display:none} }
 </style>
 </head>
 <body>
@@ -425,7 +425,7 @@ const io = new IntersectionObserver(es => es.forEach(e => {
 secs.forEach(s => s && io.observe(s));
 </script>
 <div class="cvtip" id="cvtip"></div>
-<script src="intro.js"></script>
-<script src="site.js"></script>
+<script src="intro.js?v=20260920"></script>
+<script src="site.js?v=20260920"></script>
 </body>
 </html>
