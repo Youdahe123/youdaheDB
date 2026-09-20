@@ -130,14 +130,14 @@ impl LsmTree {
         Ok(None)
     }
 
-    /// Every live key in sorted order, newest version of each, tombstones hidden.
-    pub fn scan(&self) -> io::Result<impl Iterator<Item = io::Result<(String, String)>> + '_> {
+    /// Sources in version order; callers select bounds before hiding tombstones.
+    pub(crate) fn scan_merge(&self) -> io::Result<MergeIter<'_>> {
         let mut sources: Vec<EntryIter> = Vec::with_capacity(self.sstables.len() + 1);
         sources.push(memtable_source(&self.memtable));
         for sstable in &self.sstables {
             sources.push(Box::new(sstable.iter_entries()?));
         }
-        Ok(MergeIter::new(sources).live())
+        Ok(MergeIter::new(sources))
     }
 
     /// Writes the memtable out as a new SSTable, then clears the log.
@@ -377,7 +377,7 @@ mod tests {
         db.put("b", "new").unwrap();
         db.delete("d").unwrap();
 
-        let out: Vec<_> = db.scan().unwrap().map(|e| e.unwrap()).collect();
+        let out: Vec<_> = db.scan_merge().unwrap().live().map(|e| e.unwrap()).collect();
 
         assert_eq!(
             out,
