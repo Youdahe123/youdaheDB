@@ -270,6 +270,12 @@ kbd{font-family:var(--mono);font-size:10px;border:1px solid var(--line);
 .post p{color:var(--t2);font-size:14px;line-height:1.66;margin:0;max-width:64ch}
 .post.hide{display:none}
 
+/* feed entries that live off-site: same rhythm, marked rather than sectioned */
+.post .src{color:var(--t3)}
+.post h2 a .arr{display:inline-block;margin-left:8px;font-size:15px;color:var(--t3);
+  vertical-align:1px;transition:transform .13s,color .13s}
+.post h2 a:hover .arr{color:var(--t2);transform:translate(2px,-2px)}
+
 /* external coverage, in the right rail */
 .ext-item{display:block;padding:0 0 18px;margin-bottom:18px;
   border-bottom:1px solid var(--line-soft)}
