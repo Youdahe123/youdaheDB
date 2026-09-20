@@ -22,9 +22,9 @@
   }catch(e){}
 })();
 </script>
-<script src="gate.js"></script>
+<script src="gate.js?v=20260920"></script>
 <script>YDBGate.require();</script>
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=20260920">
 <style>
 .page{display:grid;grid-template-columns:210px minmax(0,1fr);gap:46px;padding:44px 0 80px}
 .toc{position:sticky;top:86px;align-self:start}
@@ -50,7 +50,7 @@ h1.big{font-size:38px;margin-bottom:14px}
 .next a:hover{background:var(--fill)}
 .next a h3{color:var(--t1);margin-bottom:5px}
 .next a p{color:var(--t3);font-size:12.5px;margin:0}
-@media (max-width:880px){ .page{grid-template-columns:1fr;gap:0} .toc{display:none} }
+@media (max-width:880px){ .page{grid-template-columns:minmax(0,1fr);gap:0} .toc{display:none} }
 </style>
 </head>
 <body>
@@ -288,7 +288,7 @@ const io = new IntersectionObserver(es => es.forEach(e => {
 secs.forEach(s => s && io.observe(s));
 </script>
 <div class="cvtip" id="cvtip"></div>
-<script src="intro.js"></script>
-<script src="site.js"></script>
+<script src="intro.js?v=20260920"></script>
+<script src="site.js?v=20260920"></script>
 </body>
 </html>

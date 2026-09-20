@@ -23,13 +23,18 @@
   }catch(e){}
 })();
 </script>
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="app.css?v=20260920">
 <style>
 .hero{padding:70px 0 34px;text-align:center;max-width:840px;margin:0 auto}
 .hero h1{font-size:52px;line-height:1.06;margin-bottom:22px}
 .hero h1 em{font-style:normal;color:var(--t3)}
 .hero .lede{font-size:16px;margin:0 auto 30px;max-width:60ch;color:var(--t2)}
 .hero .cta{display:flex;gap:0;border:1px solid var(--line);width:fit-content;margin:0 auto}
+@media (max-width:430px){
+  .hero .cta{flex-direction:column;width:100%}
+  .hero .cta .btn{justify-content:center;border:0;border-top:1px solid var(--line);padding:11px 15px}
+  .hero .cta .btn:first-child{border-top:0}
+}
 .hero .cta a{border:0;border-right:1px solid var(--line);padding:12px 26px;font-size:13.5px}
 .hero .cta a:last-child{border-right:0}
 
@@ -66,7 +71,7 @@ radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--cat-1) 7%, transpar
 /* ── sections ── */
 .feat h3{color:var(--t1);margin:11px 0 7px;font-size:15px}
 .feat p{color:var(--t2);font-size:13px;margin:0}
-.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:26px}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:26px}
 .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--t3);margin-bottom:13px}
 .sec h2{margin-bottom:12px}
@@ -541,10 +546,10 @@ db.delete(<span class="s">"user:1"</span>)?;
   <span class="sep">/</span><a href="media.html">Writing</a>
 </div></footer>
 
-<script src="tracer.js"></script>
-<script src="home.js"></script>
+<script src="tracer.js?v=20260920"></script>
+<script src="home.js?v=20260920"></script>
 <div class="cvtip" id="cvtip"></div>
-<script src="intro.js"></script>
-<script src="site.js"></script>
+<script src="intro.js?v=20260920"></script>
+<script src="site.js?v=20260920"></script>
 </body>
 </html>
