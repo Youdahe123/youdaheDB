@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::memtable::{Lookup, MemTable};
 use crate::merge::{memtable_source, EntryIter, MergeIter};
-use crate::sstable::SSTable;
+use crate::sstable::{SSTable, TMP_SUFFIX};
 use crate::wal::Wal;
 
 const WAL_NAME: &str = "data.wal";
@@ -21,6 +21,12 @@ fn sst_id(path: &Path) -> Option<u64> {
     let name = path.file_name()?.to_str()?;
     let digits = name.strip_prefix("sst-")?.strip_suffix(".sst")?;
     digits.parse().ok()
+}
+
+fn is_tmp_table(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("sst-") && name.ends_with(TMP_SUFFIX))
 }
 
 pub struct LsmTree {
@@ -55,9 +61,17 @@ impl LsmTree {
             fs::TryLockError::Error(error) => error,
         })?;
 
-        let mut ids: Vec<u64> = fs::read_dir(&dir)?
-            .filter_map(|entry| sst_id(&entry.ok()?.path()))
-            .collect();
+        // a .tmp is a table whose flush never finished; its data is still in
+        // the wal, so the file is garbage
+        let mut ids = Vec::new();
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if is_tmp_table(&path) {
+                fs::remove_file(&path)?;
+            } else if let Some(id) = sst_id(&path) {
+                ids.push(id);
+            }
+        }
         ids.sort_unstable_by(|a, b| b.cmp(a)); // newest first
 
         let next_id = ids.first().map_or(0, |highest| highest + 1);
@@ -351,6 +365,53 @@ mod tests {
         assert_eq!(db.sstable_count(), 2);
         assert_eq!(db.get("a").unwrap(), Some("1".to_string()));
         assert_eq!(db.get("b").unwrap(), Some("2".to_string()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // a crash mid-flush leaves a half-written table behind. It must not stop
+    // the directory from opening, and the write it held must come back from
+    // the wal instead
+    #[test]
+    fn a_half_written_table_from_a_crashed_flush_is_ignored_on_open() {
+        let dir = temp_dir();
+        {
+            let mut db = open(&dir);
+            db.put("a", "1").unwrap();
+            db.flush().unwrap();
+            db.put("b", "2").unwrap();
+        }
+
+        // what a kill between File::create and the footer write leaves behind
+        let partial = dir.join(format!("{}{TMP_SUFFIX}", sst_name(1)));
+        fs::write(&partial, [7u8; 5]).unwrap();
+
+        let mut db = open(&dir);
+
+        assert!(!partial.exists(), "leftover .tmp should be deleted");
+        assert_eq!(db.sstable_count(), 1);
+        assert_eq!(db.get("a").unwrap(), Some("1".to_string()));
+        assert_eq!(db.get("b").unwrap(), Some("2".to_string()));
+
+        db.flush().unwrap();
+        assert_eq!(db.sstable_count(), 2);
+        assert_eq!(db.get("b").unwrap(), Some("2".to_string()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn flush_leaves_no_tmp_file_behind() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("k", "v").unwrap();
+        db.flush().unwrap();
+
+        let names: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert!(names.contains(&sst_name(0)));
+        assert!(!names.iter().any(|n| n.ends_with(TMP_SUFFIX)), "{names:?}");
         fs::remove_dir_all(&dir).unwrap();
     }
 

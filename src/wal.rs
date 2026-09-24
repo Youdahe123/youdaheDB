@@ -115,6 +115,9 @@ impl Wal {
             .write(true)
             .truncate(true)
             .open(&self.path)?;
+        // the truncate is a durability-relevant write too: unsynced, power
+        // loss can bring back records that are already in an sstable
+        file.sync_all()?;
         self.writer = BufWriter::new(file);
         Ok(())
     }
