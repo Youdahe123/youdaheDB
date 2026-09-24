@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 
@@ -17,12 +17,42 @@ pub struct SSTableIter {
     remaining: u64,
 }
 
+/// Suffix for a table that is still being written. Anything carrying it was
+/// never installed, so startup can delete it.
+pub const TMP_SUFFIX: &str = ".tmp";
+
+fn tmp_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(TMP_SUFFIX);
+    PathBuf::from(name)
+}
+
+/// fsyncs the directory holding `path`, making a create, rename or unlink in
+/// it survive power loss. Directories can't be opened as files on Windows, so
+/// this is unix only.
+pub fn sync_parent_dir(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let parent = match path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        File::open(parent)?.sync_all()?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 const TOMBSTONE: u32 = u32::MAX; // the WAL hardcodes u32::MAX inline but you're going to ref it in 3 places in this file so we are going to name it once
 
 impl SSTable {
-
+    // Written under a temp name and renamed into place, so a crash mid-write
+    // can only ever leave a .tmp behind - never a truncated file under a live
+    // sst name that open() then refuses to read.
     pub fn flush_from_memtable(memtable: &MemTable, path: &Path) -> io::Result<SSTable> {
-        let file = File::create(path)?;
+        let tmp_path = tmp_path(path);
+        let file = File::create(&tmp_path)?;
         let mut writer = BufWriter::new(file);
 
         let mut index: Vec<(String, u64)> = Vec::with_capacity(memtable.len());
@@ -61,6 +91,12 @@ impl SSTable {
 
         writer.flush()?;
         writer.get_ref().sync_all()?;
+        drop(writer);
+
+        // rename is atomic but not durable on its own: the new directory entry
+        // is a separate metadata write, and only syncing the directory forces it
+        fs::rename(&tmp_path, path)?;
+        sync_parent_dir(path)?;
 
         Ok(SSTable {
             index,
