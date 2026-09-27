@@ -8,7 +8,9 @@ fn main() -> io::Result<()> {
     let db = Engine::open(DATA_DIR)?;
 
     println!("youdaheDB v0.1");
-    println!("commands: put <key> <value> | get <key> | delete <key> | scan | flush | quit");
+    println!(
+        "commands: put <key> <value> | get <key> | delete <key> | scan | flush | compact | quit"
+    );
     println!();
 
     let stdin = io::stdin();
@@ -71,6 +73,11 @@ fn main() -> io::Result<()> {
 
             "flush" => {
                 db.flush()?;
+                println!("OK · {} sstable(s)", db.sstable_count()?);
+            }
+
+            "compact" => {
+                db.compact()?;
                 println!("OK · {} sstable(s)", db.sstable_count()?);
             }
 

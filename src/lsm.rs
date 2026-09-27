@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::memtable::{Lookup, MemTable};
 use crate::merge::{memtable_source, EntryIter, MergeIter};
-use crate::sstable::{SSTable, TMP_SUFFIX};
+use crate::sstable::{sync_parent_dir, SSTable, TMP_SUFFIX};
 use crate::wal::Wal;
 
 const WAL_NAME: &str = "data.wal";
@@ -170,6 +170,68 @@ impl LsmTree {
         self.memtable.clear();
 
         self.sstables.insert(0, sstable);
+        Ok(())
+    }
+
+    /// Merges every SSTable into one, keeping only the newest version of each
+    /// key. The memtable is left alone.
+    ///
+    /// Merging everything is the simplest correct policy: with no older run
+    /// left behind, every tombstone can be dropped. Leveled compaction (#10)
+    /// rewrites far less data per pass but leaves more runs for reads to search,
+    /// and has to check the levels below before it can drop a tombstone.
+    pub fn compact(&mut self) -> io::Result<()> {
+        if self.sstables.len() < 2 {
+            return Ok(());
+        }
+
+        let path = self.dir.join(sst_name(self.next_id));
+
+        let mut sources: Vec<EntryIter> = Vec::with_capacity(self.sstables.len());
+        for sstable in &self.sstables {
+            sources.push(Box::new(sstable.iter_entries()?));
+        }
+        let mut merged = MergeIter::new(sources)
+            .live()
+            .map(|entry| entry.map(|(k, v)| (k, Some(v))))
+            .peekable();
+
+        // everything was deleted: an empty table would only cost an extra file
+        let compacted = match merged.peek() {
+            Some(_) => {
+                let sstable = SSTable::write_sorted(merged, &path)?;
+                self.next_id += 1;
+                Some(sstable)
+            }
+            None => None,
+        };
+
+        // The merged table has the highest id, so while the old tables still
+        // exist it shadows them - except for keys it dropped as deleted. A crash
+        // partway through leaves some old tables behind, and one of them could
+        // still hold a value whose tombstone the merge discarded.
+        //
+        // Deleting oldest-first closes that hole. A tombstone always lives in a
+        // newer table than the value it hides, so the value's table goes first,
+        // and whatever survives a crash still reads the same. Each unlink is
+        // made durable before the next so the disk can't reorder them.
+        // #8's MANIFEST replaces this with a single atomic switch.
+        let old = std::mem::take(&mut self.sstables);
+        self.sstables.extend(compacted);
+
+        for i in (0..old.len()).rev() {
+            // on failure, keep serving the tables still on disk rather than
+            // reading as if they were gone until the next reopen
+            if let Err(e) = fs::remove_file(old[i].path()) {
+                self.sstables.extend(old.into_iter().take(i + 1));
+                return Err(e);
+            }
+            if let Err(e) = sync_parent_dir(old[i].path()) {
+                self.sstables.extend(old.into_iter().take(i));
+                return Err(e);
+            }
+        }
+
         Ok(())
     }
 
@@ -438,7 +500,12 @@ mod tests {
         db.put("b", "new").unwrap();
         db.delete("d").unwrap();
 
-        let out: Vec<_> = db.scan_merge().unwrap().live().map(|e| e.unwrap()).collect();
+        let out: Vec<_> = db
+            .scan_merge()
+            .unwrap()
+            .live()
+            .map(|e| e.unwrap())
+            .collect();
 
         assert_eq!(
             out,
@@ -466,6 +533,228 @@ mod tests {
         );
         assert_eq!(db.get("key0").unwrap(), Some("value".to_string()));
         assert_eq!(db.get("key9").unwrap(), Some("value".to_string()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // every live key and value, read through the same path users see
+    fn snapshot(db: &LsmTree) -> Vec<(String, String)> {
+        db.scan_merge()
+            .unwrap()
+            .live()
+            .map(|e| e.unwrap())
+            .collect()
+    }
+
+    fn sst_files(dir: &Path) -> Vec<PathBuf> {
+        let mut files: Vec<PathBuf> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| sst_id(p).is_some())
+            .collect();
+        files.sort();
+        files
+    }
+
+    #[test]
+    fn compaction_keeps_only_the_newest_version() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("k", "old").unwrap();
+        db.flush().unwrap();
+        db.put("k", "new").unwrap();
+        db.flush().unwrap();
+
+        db.compact().unwrap();
+
+        assert_eq!(db.sstable_count(), 1);
+        assert_eq!(db.get("k").unwrap(), Some("new".to_string()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // the tombstone is dropped, so if the older value made it into the merged
+    // table there would be nothing left to hide it
+    #[test]
+    fn compaction_does_not_resurrect_a_deleted_key() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("gone", "v").unwrap();
+        db.put("kept", "v").unwrap();
+        db.flush().unwrap();
+        db.delete("gone").unwrap();
+        db.flush().unwrap();
+
+        db.compact().unwrap();
+        assert_eq!(db.get("gone").unwrap(), None);
+        drop(db);
+
+        let db = open(&dir);
+        assert_eq!(db.get("gone").unwrap(), None);
+        assert_eq!(db.get("kept").unwrap(), Some("v".to_string()));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn compaction_drops_superseded_versions_and_tombstones_from_disk() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        for round in 0..3 {
+            db.put("a", &format!("a{round}")).unwrap();
+            db.put("b", &format!("b{round}")).unwrap();
+            db.flush().unwrap();
+        }
+        db.delete("b").unwrap();
+        db.flush().unwrap();
+
+        db.compact().unwrap();
+
+        let entries: Vec<_> = db.sstables[0]
+            .iter_entries()
+            .unwrap()
+            .map(|e| e.unwrap())
+            .collect();
+        assert_eq!(entries, vec![("a".to_string(), Some("a2".to_string()))]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // the invariant that matters: compaction is invisible to readers
+    #[test]
+    fn reads_are_identical_before_and_after_compaction() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        for round in 0..5 {
+            for i in 0..20 {
+                let key = format!("key{i:02}");
+                match (i + round) % 4 {
+                    0 => db.delete(&key).unwrap(),
+                    _ => db.put(&key, &format!("r{round}")).unwrap(),
+                }
+            }
+            db.flush().unwrap();
+        }
+        // unflushed writes sit above the compacted table and must still win
+        db.put("key00", "memtable").unwrap();
+        db.delete("key01").unwrap();
+
+        let before = snapshot(&db);
+        let gets_before: Vec<_> = (0..20)
+            .map(|i| db.get(&format!("key{i:02}")).unwrap())
+            .collect();
+
+        db.compact().unwrap();
+        assert_eq!(db.sstable_count(), 1);
+        assert_eq!(snapshot(&db), before);
+        let gets_after: Vec<_> = (0..20)
+            .map(|i| db.get(&format!("key{i:02}")).unwrap())
+            .collect();
+        assert_eq!(gets_after, gets_before);
+        drop(db);
+
+        let db = open(&dir);
+        assert_eq!(snapshot(&db), before);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn compacting_only_deleted_keys_leaves_no_tables() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("k", "v").unwrap();
+        db.flush().unwrap();
+        db.delete("k").unwrap();
+        db.flush().unwrap();
+
+        db.compact().unwrap();
+
+        assert_eq!(db.sstable_count(), 0);
+        assert!(sst_files(&dir).is_empty());
+        assert_eq!(db.get("k").unwrap(), None);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn compaction_after_reopen_does_not_overwrite_an_existing_table() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("a", "1").unwrap();
+        db.flush().unwrap();
+        db.put("b", "2").unwrap();
+        db.flush().unwrap();
+        db.compact().unwrap();
+        db.put("c", "3").unwrap();
+        db.flush().unwrap();
+        drop(db);
+
+        let mut db = open(&dir);
+        db.compact().unwrap();
+        assert_eq!(snapshot(&db).len(), 3);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Simulates a crash at every point in the cleanup: the merged table is
+    // installed, and some newest-first suffix of the old tables is still on
+    // disk because deletion runs oldest-first. Every one of those states has to
+    // read the same as the finished compaction.
+    #[test]
+    fn a_crash_partway_through_cleanup_does_not_resurrect_anything() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.put("dead", "v").unwrap();
+        db.put("live", "old").unwrap();
+        db.flush().unwrap();
+        db.put("live", "new").unwrap();
+        db.flush().unwrap();
+        db.delete("dead").unwrap();
+        db.flush().unwrap();
+
+        let old_files = sst_files(&dir); // oldest first
+        let saved: Vec<Vec<u8>> = old_files.iter().map(|p| fs::read(p).unwrap()).collect();
+        let expected = snapshot(&db);
+
+        db.compact().unwrap();
+        drop(db);
+
+        for survivors in 0..=old_files.len() {
+            let first_survivor = old_files.len() - survivors;
+            for (path, bytes) in old_files.iter().zip(&saved).skip(first_survivor) {
+                fs::write(path, bytes).unwrap();
+            }
+
+            let db = open(&dir);
+            assert_eq!(
+                snapshot(&db),
+                expected,
+                "{survivors} old table(s) left behind"
+            );
+            assert_eq!(db.get("dead").unwrap(), None);
+            drop(db);
+
+            for path in &old_files {
+                let _ = fs::remove_file(path);
+            }
+        }
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn compacting_one_table_or_none_is_a_no_op() {
+        let dir = temp_dir();
+        let mut db = open(&dir);
+
+        db.compact().unwrap();
+        assert_eq!(db.sstable_count(), 0);
+
+        db.put("k", "v").unwrap();
+        db.flush().unwrap();
+        let files = sst_files(&dir);
+        db.compact().unwrap();
+        assert_eq!(sst_files(&dir), files);
         fs::remove_dir_all(&dir).unwrap();
     }
 }

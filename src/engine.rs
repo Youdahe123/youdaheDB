@@ -174,6 +174,12 @@ impl Engine {
         self.write()?.flush()
     }
 
+    /// Merges every disk table into one, holding the write lock throughout.
+    /// Reads and writes wait for the whole merge; background compaction is #17.
+    pub fn compact(&self) -> io::Result<()> {
+        self.write()?.compact()
+    }
+
     /// Returns the current number of immutable disk tables.
     pub fn sstable_count(&self) -> io::Result<usize> {
         Ok(self.read()?.sstable_count())
