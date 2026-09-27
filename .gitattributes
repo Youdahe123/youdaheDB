@@ -1,0 +1,4 @@
+# The marketing site and waitlist backend live in this repo but aren't the
+# database. Keep them out of GitHub's language stats so the repo reads as Rust.
+web/** linguist-documentation
+supabase/** linguist-documentation
