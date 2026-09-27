@@ -47,25 +47,44 @@ pub fn sync_parent_dir(path: &Path) -> io::Result<()> {
 const TOMBSTONE: u32 = u32::MAX; // the WAL hardcodes u32::MAX inline but you're going to ref it in 3 places in this file so we are going to name it once
 
 impl SSTable {
+    pub fn flush_from_memtable(memtable: &MemTable, path: &Path) -> io::Result<SSTable> {
+        let entries = memtable.iter().map(|(k, v)| Ok((k.as_str(), v.as_deref())));
+        SSTable::write_sorted(entries, path)
+    }
+
     // Written under a temp name and renamed into place, so a crash mid-write
     // can only ever leave a .tmp behind - never a truncated file under a live
     // sst name that open() then refuses to read.
-    pub fn flush_from_memtable(memtable: &MemTable, path: &Path) -> io::Result<SSTable> {
+    //
+    // Entries must arrive in ascending key order with no duplicates, or the
+    // index stops being binary searchable. Flush gets that from the btreemap,
+    // compaction from the merge iterator.
+    pub fn write_sorted<K, V>(
+        entries: impl Iterator<Item = io::Result<(K, Option<V>)>>,
+        path: &Path,
+    ) -> io::Result<SSTable>
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
+    {
         let tmp_path = tmp_path(path);
         let file = File::create(&tmp_path)?;
         let mut writer = BufWriter::new(file);
 
-        let mut index: Vec<(String, u64)> = Vec::with_capacity(memtable.len());
+        let mut index: Vec<(String, u64)> = Vec::with_capacity(entries.size_hint().0);
         let mut offset: u64 = 0;
 
-        for (key, value) in memtable.iter() {
-            index.push((key.clone(), offset));
+        for entry in entries {
+            let (key, value) = entry?;
+            let key = key.as_ref();
+            index.push((key.to_string(), offset));
 
             writer.write_all(&(key.len() as u32).to_le_bytes())?;
             writer.write_all(key.as_bytes())?;
 
             let value_len = match value {
                 Some(v) => {
+                    let v = v.as_ref();
                     writer.write_all(&(v.len() as u32).to_le_bytes())?;
                     writer.write_all(v.as_bytes())?;
                     4 + v.len()
@@ -187,7 +206,10 @@ impl SSTable {
         Ok(Lookup::Found(value))
     }
 
-    // used for compaction later
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     pub fn iter_entries(&self) -> io::Result<SSTableIter> {
         let file = File::open(&self.path)?;
         Ok(SSTableIter {
