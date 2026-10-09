@@ -6,8 +6,15 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use youdaheDB::Engine;
 
 const VALUE_BYTES: usize = 16384;
+
+// Must match crash_writer's value_for, so a wrong value is caught, not just a missing one.
+fn value_for(i: usize, size: usize) -> String {
+    let seed = format!("{i}:");
+    seed.repeat(size / seed.len() + 1)[..size].to_string()
+}
 
 struct TestDir(PathBuf);
 
@@ -80,9 +87,23 @@ fn kill_mid_write(dir: &Path, run_for: Duration) -> Vec<String> {
     Arc::try_unwrap(acked).unwrap().into_inner().unwrap()
 }
 
+// The invariant is one-way: every acked write must survive the crash.
+// Unacked writes that made it to disk anyway are fine, so they aren't checked.
+fn verify_acked(dir: &Path, acked: &[String]) {
+    let db = Engine::open(dir.to_str().unwrap())
+        .unwrap_or_else(|e| panic!("reopen after kill failed: {e}"));
+    for (i, key) in acked.iter().enumerate() {
+        match db.get(key).unwrap() {
+            Some(v) if v == value_for(i, VALUE_BYTES) => {}
+            Some(_) => panic!("{key} survived with the wrong value"),
+            None => panic!("{key} was acked but lost ({} acked total)", acked.len()),
+        }
+    }
+}
+
 #[test]
-fn kill_lands_mid_write_and_acks_are_captured() {
-    let dir = TestDir::new("a3");
+fn acked_writes_survive_a_kill() {
+    let dir = TestDir::new("a4");
     let acked = kill_mid_write(&dir.0, jitter(1500, 3500));
 
     assert!(!acked.is_empty(), "writer acked nothing before the kill");
@@ -90,9 +111,9 @@ fn kill_lands_mid_write_and_acks_are_captured() {
         assert_eq!(key, &format!("key:{i}"), "acks must arrive in order, no gaps");
     }
 
-    // A4 checks these against the reopened directory.
+    verify_acked(&dir.0, &acked);
     println!(
-        "acked {} keys, {} sstable(s) on disk",
+        "acked {} keys, {} sstable(s) on disk, all recovered",
         acked.len(),
         sstable_count(&dir.0)
     );
